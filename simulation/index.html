@@ -59,7 +59,7 @@
 
   <div id="insuredTable" class="panel">
     <h2>Registered Insureds</h2>
-    <p class="help">Each row is an entity insured against slashing. Their premium is apportioned by risk-weighted share.</p>
+    <p class="help">Click + to add, &minus; to remove, or Slash to trigger an event. Premium is apportioned by risk-weighted share.</p>
     <table>
       <thead>
         <tr>
@@ -69,11 +69,49 @@
           <th>V_i · π_i</th>
           <th>w_i (bps)</th>
           <th>Premium / hr</th>
-          <th>Active</th>
+          <th></th>
         </tr>
       </thead>
       <tbody id="insuredBody"></tbody>
+      <tfoot>
+        <tr class="add-row">
+          <td><input id="addName" type="text" placeholder="Name" style="width:100%" /></td>
+          <td><input id="addV" type="text" placeholder="V_i" style="width:100%" /></td>
+          <td><input id="addPi" type="text" placeholder="π_i" style="width:100%" /></td>
+          <td colspan="3"></td>
+          <td><button id="addBtn" class="btn" title="Register insured">+</button></td>
+        </tr>
+      </tfoot>
     </table>
+  </div>
+
+  <!-- Slash modal -->
+  <div id="slashModal" class="modal-overlay" style="display:none">
+    <div class="modal panel">
+      <h2>Slash Event</h2>
+      <p class="help">Slashing <strong id="slashTarget">-</strong></p>
+      <div class="form-row">
+        <span class="label">λ_i (loss fraction)</span>
+        <input id="slashLambda" type="text" placeholder="bps (e.g. 5000 = 50%)" style="width:140px" />
+        <span class="label">bps</span>
+      </div>
+      <div class="form-row" style="margin-top:12px">
+        <button id="slashConfirmBtn" class="btn danger">Trigger Slash</button>
+        <button id="slashCancelBtn" class="btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event info bar (shown when event active) -->
+  <div id="eventBar" class="panel event-bar" style="display:none">
+    <div class="info-grid">
+      <div><span class="label">Slashed</span><span id="evtInsured" class="mono">-</span></div>
+      <div><span class="label">λ_i</span><span id="evtLambdaVal">-</span> bps</div>
+      <div><span class="label">V_snap</span><span id="evtVSnap">-</span></div>
+      <div><span class="label">O(T*)</span><span id="evtOracle">-</span></div>
+      <div><span class="label">Payout</span><span id="evtPayout">-</span></div>
+    </div>
+    <button id="routePayoutBtn" class="btn primary" style="margin-top:8px">Route Payout</button>
   </div>
 
   <!-- ═══════════ APPORTIONMENT LAYER PERSPECTIVE ═══════════ -->
@@ -137,38 +175,6 @@
     </div>
   </div>
 
-  <div class="grid-2">
-    <div id="registry" class="panel">
-      <h2>Register / Deregister</h2>
-      <div class="form-row">
-        <input id="regAddr" type="text" placeholder="Name (e.g. MyValidator)" />
-        <input id="regV" type="text" placeholder="V_i (HYPE)" />
-        <input id="regPi" type="text" placeholder="π_i (bps)" />
-        <button id="registerBtn" class="btn">Register</button>
-      </div>
-      <div class="form-row">
-        <select id="deregAddr"></select>
-        <button id="deregisterBtn" class="btn danger">Deregister</button>
-      </div>
-    </div>
-
-    <div id="event" class="panel">
-      <h2>Slash Event</h2>
-      <div class="form-row">
-        <select id="evtAddr"></select>
-        <input id="evtLambda" type="text" placeholder="λ_i (bps, e.g. 5000 = 50%)" />
-        <button id="triggerBtn" class="btn danger">Trigger</button>
-      </div>
-      <button id="routePayoutBtn" class="btn primary" style="margin-top:8px;width:100%">Route Payout</button>
-      <div id="eventInfo" class="info-grid" style="margin-top:12px; display:none">
-        <div><span class="label">Slashed</span><span id="evtInsured" class="mono">-</span></div>
-        <div><span class="label">λ_i (bps)</span><span id="evtLambdaVal">-</span></div>
-        <div><span class="label">V_snap</span><span id="evtVSnap">-</span></div>
-        <div><span class="label">O(T*)</span><span id="evtOracle">-</span></div>
-        <div><span class="label">Payout (V_i · λ_i)</span><span id="evtPayout">-</span></div>
-      </div>
-    </div>
-  </div>
 
   <!-- ═══════════ LP / SHORTS PERSPECTIVE ═══════════ -->
 
