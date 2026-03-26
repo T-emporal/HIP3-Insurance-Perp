@@ -69,7 +69,6 @@
           <th>Address</th>
           <th>V_i (HYPE)</th>
           <th>pi_i (bps)</th>
-          <th>Premium Paid</th>
           <th>Weight (bps)</th>
           <th>Active</th>
         </tr>
@@ -78,35 +77,20 @@
     </table>
   </div>
 
-  <div class="grid-2">
-    <div id="premiums" class="panel">
-      <h2>Premiums</h2>
-      <div class="form-row">
-        <input id="premAddr" type="text" placeholder="Pay as address (insured)" />
-        <input id="premAmount" type="text" placeholder="Amount (HYPE)" />
-        <button id="payPremiumBtn" class="btn">Pay Premium</button>
-      </div>
-      <div class="form-row">
-        <input id="withdrawAmount" type="text" placeholder="Withdraw amount (HYPE)" />
-        <button id="withdrawBtn" class="btn">Withdraw (owner)</button>
-      </div>
+  <div id="event" class="panel">
+    <h2>Slash Event</h2>
+    <div class="form-row">
+      <input id="evtAddr" type="text" placeholder="Slashed insured address" />
+      <input id="evtLambda" type="text" placeholder="lambda_i (bps)" />
+      <button id="triggerBtn" class="btn danger">Trigger Event</button>
+      <button id="routePayoutBtn" class="btn primary">Route Payout</button>
     </div>
-
-    <div id="event" class="panel">
-      <h2>Slash Event</h2>
-      <div class="form-row">
-        <input id="evtAddr" type="text" placeholder="Slashed insured address" />
-        <input id="evtLambda" type="text" placeholder="lambda_i (bps)" />
-        <button id="triggerBtn" class="btn danger">Trigger Event</button>
-      </div>
-      <button id="routePayoutBtn" class="btn primary" style="margin-top:8px">Route Payout</button>
-      <div id="eventInfo" class="info-grid" style="margin-top:12px; display:none">
-        <div><span class="label">Event Insured</span><span id="evtInsured" class="mono">-</span></div>
-        <div><span class="label">Lambda (bps)</span><span id="evtLambdaVal">-</span></div>
-        <div><span class="label">V_snap</span><span id="evtVSnap">-</span></div>
-        <div><span class="label">Oracle O(T*)</span><span id="evtOracle">-</span></div>
-        <div><span class="label">Pending Payout</span><span id="evtPayout">-</span></div>
-      </div>
+    <div id="eventInfo" class="info-grid" style="margin-top:12px; display:none">
+      <div><span class="label">Event Insured</span><span id="evtInsured" class="mono">-</span></div>
+      <div><span class="label">Lambda (bps)</span><span id="evtLambdaVal">-</span></div>
+      <div><span class="label">V_snap</span><span id="evtVSnap">-</span></div>
+      <div><span class="label">Oracle O(T*)</span><span id="evtOracle">-</span></div>
+      <div><span class="label">Pending Payout</span><span id="evtPayout">-</span></div>
     </div>
   </div>
 
