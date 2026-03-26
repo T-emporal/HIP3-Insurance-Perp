@@ -2,6 +2,8 @@
 
 **Perpetual Contracts as a General Insurance Mechanism**
 
+> **[Try the interactive simulator](https://t-emporal.github.io/HIP3-Insurance-Perp/simulation/)** — no install, no blockchain, runs in your browser
+
 A two-layer insurance protocol that converts perpetual derivative funding mechanics into premium collection and loss payout — no reserves, no claims committees, no governance votes. The canonical instantiation applies it to HIP-3 validator slashing risk on Hyperliquid.
 
 ---
@@ -140,31 +142,40 @@ The math proves correctness *given* deployment constraints. These constraints ar
 
 ---
 
-## Running Locally
+## Interactive Simulator
+
+Open **[the simulator](https://t-emporal.github.io/HIP3-Insurance-Perp/simulation/)** in any browser. No install needed.
+
+It comes pre-loaded with 3 test validators and a 500 HYPE pool. You can:
+- Register/deregister insured entities
+- Set a mark price and watch funding rates + per-insured premiums update
+- Trigger a slash event and observe oracle calibration, payout computation, N*
+- Route the payout and see balances adjust
+
+Or open `simulation/index.html` directly from a local clone — it works offline too.
+
+### Hardhat Dev Environment
+
+For Solidity contract testing (gas, reverts, upgrades), the full Hardhat setup is archived in `hardhat-dev/`:
 
 ```bash
-git clone https://github.com/T-emporal/HIP3-Insurance-Perp.git
-cd HIP3-Insurance-Perp
+cd hardhat-dev
 bash start.sh
 ```
-
-Opens http://localhost:3000 with:
-- 3 pre-registered insured validators (varied risk profiles)
-- 500 HYPE simulated pool balance
-- Interactive UI: register entities, set mark price, trigger slash events, observe funding flows and payouts
-
-No wallet, no testnet funds, no private key. Everything runs on a local Hardhat node.
 
 ---
 
 ## Repository Structure
 
 ```
-├── apportionment-layer/        Hardhat project — UUPS upgradeable contracts
-│   ├── contracts/              ApportionmentLayer.sol + V2 example
-│   ├── scripts/                deploy, deploy-local (seeded), upgrade
-│   └── test/                   25 tests (lifecycle, access control, upgrade)
-├── simulation/                 Browser UI (vanilla HTML/JS/CSS)
+├── simulation/                 Interactive simulator (static, hostable anywhere)
+│   ├── index.html              Single-page app
+│   ├── engine.js               Pure JS contract logic
+│   ├── app.js                  UI rendering + actions
+│   └── style.css               Dark theme
+├── hardhat-dev/                Solidity dev environment (archived)
+│   ├── apportionment-layer/    Hardhat project + UUPS contracts + 20 tests
+│   └── start.sh                Local blockchain simulation
 ├── lean_consolidated/          Lean 4 formal proofs (39 theorems, 0 sorry)
 ├── deployment/                 Testnet deployment scripts (parked)
 ├── backups/                    Original uploaded archives

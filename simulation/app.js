@@ -1,189 +1,87 @@
-/* HIP3 Apportionment Layer Simulator — Frontend */
+/* HIP3 Apportionment Layer — Static Simulation UI */
 
-let provider, signer, contract, contractAddr, abi, deployInfo;
-let pollInterval = null;
 const F_MAX_DEFAULT_BPS = 10; // 0.1%
+let seedData;
 
-// ── Initialization ──────────────────────────────────────────────────────
+// ── Init ────────────────────────────────────────────────────────────────
 
-async function init() {
-  try {
-    const res = await fetch("abi.json");
-    abi = await res.json();
-  } catch {
-    logMsg("ABI not found. Run: cd apportionment-layer && npx hardhat compile", "error");
-    return;
-  }
+function init() {
+  seedData = engine.seed();
 
-  try {
-    const res = await fetch("deploy-info.json");
-    deployInfo = await res.json();
-    if (deployInfo.proxy) {
-      document.getElementById("contractAddr").value = deployInfo.proxy;
-    }
-    // Show seed data hints
-    if (deployInfo.seedData) {
-      const hints = deployInfo.seedData.insureds.map(i =>
-        `${i.label}: ${i.address}`
-      ).join("\n");
-      document.getElementById("seedHints").textContent = hints;
-      document.getElementById("seedPanel").style.display = "block";
-    }
-  } catch {
-    // No deploy info
-  }
-
-  // Wire up buttons
-  document.getElementById("connectBtn").addEventListener("click", connect);
   document.getElementById("registerBtn").addEventListener("click", doRegister);
   document.getElementById("deregisterBtn").addEventListener("click", doDeregister);
   document.getElementById("triggerBtn").addEventListener("click", doTriggerEvent);
   document.getElementById("routePayoutBtn").addEventListener("click", doRoutePayout);
+  document.getElementById("markPriceInput").addEventListener("input", refreshAll);
+  document.getElementById("fMaxInput").addEventListener("input", refreshAll);
 
-  // Auto-connect if deploy-info exists
-  if (deployInfo && deployInfo.proxy) {
-    connect();
-  }
-}
+  // Show seed hints
+  const hints = seedData.map(v => v.label).join("\n");
+  document.getElementById("seedHints").textContent = hints;
 
-// ── Connection ──────────────────────────────────────────────────────────
-
-async function connect() {
-  const rpcUrl = document.getElementById("rpcUrl").value.trim();
-  contractAddr = document.getElementById("contractAddr").value.trim();
-
-  if (!rpcUrl || !contractAddr) {
-    setStatus("Please enter RPC URL and contract address", "error");
-    return;
-  }
-
-  try {
-    provider = new ethers.JsonRpcProvider(rpcUrl);
-    const network = await provider.getNetwork();
-    const block = await provider.getBlockNumber();
-
-    // Use first account as signer (Hardhat local = owner)
-    try {
-      signer = await provider.getSigner(0);
-    } catch {
-      signer = null;
-      logMsg("Read-only mode (no signer available)", "info");
-    }
-
-    contract = new ethers.Contract(contractAddr, abi, signer || provider);
-
-    // Verify contract exists
-    const owner = await contract.owner();
-
-    document.getElementById("networkName").textContent =
-      network.name === "unknown" ? "localhost" : network.name;
-    document.getElementById("chainId").textContent = network.chainId.toString();
-    document.getElementById("blockNum").textContent = block;
-    document.getElementById("ownerAddr").textContent = owner;
-    document.getElementById("connInfo").style.display = "grid";
-    setStatus("Connected", "connected");
-    logMsg(`Connected to ${rpcUrl} | contract ${contractAddr.slice(0,10)}...`, "success");
-
-    if (pollInterval) clearInterval(pollInterval);
-    refreshAll();
-    pollInterval = setInterval(refreshAll, 3000);
-  } catch (e) {
-    setStatus("Connection failed: " + e.message, "error");
-    logMsg("Connection error: " + e.message, "error");
-  }
-}
-
-function setStatus(msg, cls) {
-  const el = document.getElementById("connStatus");
-  el.textContent = msg;
-  el.className = "status " + (cls || "");
+  refreshAll();
+  logMsg("Simulation loaded — 3 validators pre-registered, 500 HYPE pool balance", "success");
 }
 
 // ── Refresh ─────────────────────────────────────────────────────────────
 
-async function refreshAll() {
-  if (!contract) return;
-  try {
-    const [vPool, piPool, count, bal, evtActive, block] = await Promise.all([
-      contract.V_pool(),
-      contract.piPoolWeighted(),
-      contract.insuredCount(),
-      contract.balance(),
-      contract.eventActive(),
-      provider.getBlockNumber(),
-    ]);
+function refreshAll() {
+  const s = engine.state;
 
-    document.getElementById("vPool").textContent = fmtEth(vPool) + " HYPE";
-    document.getElementById("piPool").textContent = piPool.toString() + " bps";
-    document.getElementById("insuredCount").textContent = count.toString();
-    document.getElementById("contractBal").textContent = fmtEth(bal) + " HYPE";
-    document.getElementById("blockNum").textContent = block;
+  document.getElementById("vPool").textContent = fmt(s.V_pool) + " HYPE";
+  document.getElementById("piPool").textContent = Math.round(engine.piPoolWeighted()) + " bps";
+  document.getElementById("insuredCount").textContent = s.insuredList.filter(a => s.insureds.get(a)?.active).length;
+  document.getElementById("contractBal").textContent = fmt(s.balance) + " HYPE";
+  document.getElementById("eventActiveFlag").textContent = s.eventActive ? "YES" : "No";
+  document.getElementById("eventActiveFlag").style.color = s.eventActive ? "#f85149" : "#3fb950";
 
-    document.getElementById("eventActiveFlag").textContent = evtActive ? "YES" : "No";
-    document.getElementById("eventActiveFlag").style.color = evtActive ? "#f85149" : "#3fb950";
-
-    await refreshInsuredTable(count);
-    await refreshEventInfo(evtActive);
-    await refreshOracle(evtActive);
-  } catch (e) {
-    console.error("Refresh error:", e);
-  }
+  refreshInsuredTable();
+  refreshEventInfo();
+  refreshOracle();
 }
 
-async function refreshInsuredTable(count) {
+function refreshInsuredTable() {
+  const s = engine.state;
   const tbody = document.getElementById("insuredBody");
   const rows = [];
-  const labels = {};
-  if (deployInfo?.seedData?.insureds) {
-    deployInfo.seedData.insureds.forEach(i => { labels[i.address.toLowerCase()] = i.label; });
-  }
 
-  for (let i = 0; i < Number(count); i++) {
-    try {
-      const addr = await contract.insuredList(i);
-      const ins = await contract.getInsured(addr);
-      let weight = "0";
-      try { weight = (await contract.premiumWeight(addr)).toString(); } catch {}
-      const label = labels[addr.toLowerCase()] || "";
+  for (const addr of s.insuredList) {
+    const ins = s.insureds.get(addr);
+    if (!ins) continue;
+    const w = Math.round(engine.premiumWeight(addr));
 
-      rows.push(`<tr>
-        <td class="mono" title="${addr}">${label ? '<span class="tag">' + label + '</span> ' : ''}${addr.slice(0,8)}...${addr.slice(-6)}</td>
-        <td>${fmtEth(ins.V)}</td>
-        <td>${ins.pi.toString()}</td>
-        <td>${weight}</td>
-        <td style="color:${ins.active ? '#3fb950' : '#f85149'}">${ins.active ? 'Yes' : 'No'}</td>
-      </tr>`);
-    } catch {}
+    rows.push(`<tr>
+      <td class="mono"><span class="tag">${addr}</span></td>
+      <td>${fmt(ins.V)}</td>
+      <td>${ins.pi}</td>
+      <td>${w}</td>
+      <td style="color:${ins.active ? '#3fb950' : '#f85149'}">${ins.active ? 'Yes' : 'No'}</td>
+    </tr>`);
   }
 
   tbody.innerHTML = rows.length ? rows.join("") :
     '<tr><td colspan="5" style="text-align:center;color:#8b949e">No insureds registered</td></tr>';
 }
 
-async function refreshEventInfo(isEvent) {
+function refreshEventInfo() {
+  const s = engine.state;
   const el = document.getElementById("eventInfo");
-  if (!isEvent) {
+
+  if (!s.eventActive) {
     el.style.display = "none";
     return;
   }
   el.style.display = "grid";
 
-  const [insured, lambda, vSnap, oracle, payout] = await Promise.all([
-    contract.eventInsured(),
-    contract.eventLambdaBps(),
-    contract.V_snap(),
-    contract.oracleValue6(),
-    contract.pendingPayout(),
-  ]);
-
-  document.getElementById("evtInsured").textContent = insured;
-  document.getElementById("evtLambdaVal").textContent = lambda.toString();
-  document.getElementById("evtVSnap").textContent = fmtEth(vSnap) + " HYPE";
-  document.getElementById("evtOracle").textContent = (Number(oracle) / 1e6).toFixed(6);
-  document.getElementById("evtPayout").textContent = fmtEth(payout) + " HYPE";
+  document.getElementById("evtInsured").textContent = s.eventInsured;
+  document.getElementById("evtLambdaVal").textContent = s.eventLambdaBps;
+  document.getElementById("evtVSnap").textContent = fmt(s.V_snap) + " HYPE";
+  document.getElementById("evtOracle").textContent = (s.oracleValue6 / 1e6).toFixed(6);
+  document.getElementById("evtPayout").textContent = fmt(s.pendingPayout) + " HYPE";
 }
 
-async function refreshOracle(isEvent) {
+function refreshOracle() {
+  const s = engine.state;
   const stateEl = document.getElementById("oracleState");
   const priceEl = document.getElementById("oraclePrice");
   const eventFundingEl = document.getElementById("eventFundingInfo");
@@ -191,17 +89,13 @@ async function refreshOracle(isEvent) {
   const fMax = fMaxBps / 10000;
   const markPrice = parseFloat(document.getElementById("markPriceInput").value) || 0;
 
-  if (!isEvent) {
-    // ── NORMAL STATE: longs pay shorts, premium collection ──
+  if (!s.eventActive) {
     stateEl.textContent = "NORMAL";
     stateEl.className = "badge badge-normal";
     const oracleKeepAlive = 0.0001;
     priceEl.textContent = oracleKeepAlive.toFixed(4) + " (keep-alive)";
     eventFundingEl.style.display = "none";
 
-    // f(t) = (P(t) - O(t)) / Δt — but since Δt=1hr and rates are per-interval:
-    // Effective: f = P(t) - O(t) ≈ P(t) when O≈0
-    // Premium per hour per unit notional = P(t)
     const fundingRate = markPrice - oracleKeepAlive;
     const capped = Math.min(fundingRate, fMax);
     document.getElementById("fundingRate").textContent =
@@ -209,82 +103,62 @@ async function refreshOracle(isEvent) {
     document.getElementById("fundingDirection").textContent = "Longs → Shorts (premium)";
     document.getElementById("fundingDirection").style.color = "#58a6ff";
 
-    // Pool premium per hour = V_pool * P(t)
-    const vPool = Number(ethers.formatEther(await contract.V_pool()));
-    const poolPremium = vPool * capped;
-    document.getElementById("poolPremiumHr").textContent = poolPremium.toFixed(4) + " HYPE";
+    const poolPremium = s.V_pool * capped;
+    document.getElementById("poolPremiumHr").textContent = fmt(poolPremium) + " HYPE";
 
-    // Per-insured breakdown
-    await refreshFundingTable(capped, false);
+    refreshFundingTable(capped, false);
   } else {
-    // ── EVENT STATE: shorts pay longs at f_max ──
     stateEl.textContent = "EVENT";
     stateEl.className = "badge badge-event";
 
-    const oracle = Number(await contract.oracleValue6()) / 1e6;
+    const oracle = s.oracleValue6 / 1e6;
     priceEl.textContent = oracle.toFixed(6);
 
-    // During event: f(t) = (P(t) - O(T*)) / Δt → negative (since O >> P)
-    // Capped at -f_max, so shorts pay longs f_max per interval
-    const fundingRate = -fMax;
     document.getElementById("fundingRate").textContent =
-      (fundingRate * 10000).toFixed(2) + " bps/hr (at -f_max)";
+      (-fMax * 10000).toFixed(2) + " bps/hr (at -f_max)";
     document.getElementById("fundingDirection").textContent = "Shorts → Longs (payout)";
     document.getElementById("fundingDirection").style.color = "#f85149";
 
-    const vSnap = Number(ethers.formatEther(await contract.V_snap()));
-    const perInterval = vSnap * fMax;
+    const perInterval = s.V_snap * fMax;
     document.getElementById("poolPremiumHr").textContent =
-      perInterval.toFixed(4) + " HYPE/hr (from LPs)";
+      fmt(perInterval) + " HYPE/hr (from LPs)";
 
-    // N* and payout timing
     const nStar = Math.ceil(oracle / fMax);
-    const payout = Number(ethers.formatEther(await contract.pendingPayout()));
     const totalFromLPs = perInterval * nStar;
-    const excess = totalFromLPs - payout;
+    const excess = totalFromLPs - s.pendingPayout;
 
     eventFundingEl.style.display = "block";
     document.getElementById("oracleNStar").textContent = nStar;
     document.getElementById("payoutTime").textContent = nStar + " hours";
-    document.getElementById("totalFromLPs").textContent = totalFromLPs.toFixed(4) + " HYPE";
-    document.getElementById("ceilingExcess").textContent = excess.toFixed(4) + " HYPE (buffer)";
+    document.getElementById("totalFromLPs").textContent = fmt(totalFromLPs) + " HYPE";
+    document.getElementById("ceilingExcess").textContent = fmt(excess) + " HYPE (buffer)";
 
-    const pct = Math.min(100, (totalFromLPs / Math.max(payout, 0.0001)) * 100);
+    const pct = Math.min(100, (totalFromLPs / Math.max(s.pendingPayout, 0.0001)) * 100);
     document.getElementById("fundingProgress").style.width = pct + "%";
     document.getElementById("fundingLabel").textContent =
-      `${perInterval.toFixed(4)}/hr x ${nStar}hr = ${totalFromLPs.toFixed(4)} HYPE → pays ${payout.toFixed(4)} HYPE`;
+      `${fmt(perInterval)}/hr x ${nStar}hr = ${fmt(totalFromLPs)} HYPE → pays ${fmt(s.pendingPayout)} HYPE`;
 
-    await refreshFundingTable(fMax, true);
+    refreshFundingTable(fMax, true);
   }
 }
 
-async function refreshFundingTable(rate, isEvent) {
+function refreshFundingTable(rate, isEvent) {
+  const s = engine.state;
   const tbody = document.getElementById("fundingBody");
-  const count = Number(await contract.insuredCount());
   const rows = [];
-  const labels = {};
-  if (deployInfo?.seedData?.insureds) {
-    deployInfo.seedData.insureds.forEach(i => { labels[i.address.toLowerCase()] = i.label; });
-  }
 
-  for (let i = 0; i < count; i++) {
-    try {
-      const addr = await contract.insuredList(i);
-      const ins = await contract.getInsured(addr);
-      if (!ins.active) continue;
-      const v = Number(ethers.formatEther(ins.V));
-      const premium = v * rate;
-      let weight = "0";
-      try { weight = (await contract.premiumWeight(addr)).toString(); } catch {}
-      const label = labels[addr.toLowerCase()] || shortAddr(addr);
+  for (const addr of s.insuredList) {
+    const ins = s.insureds.get(addr);
+    if (!ins || !ins.active) continue;
+    const premium = ins.V * rate;
+    const w = Math.round(engine.premiumWeight(addr));
 
-      rows.push(`<tr>
-        <td class="mono">${label}</td>
-        <td>${v.toFixed(1)}</td>
-        <td style="color:${isEvent ? '#f85149' : '#3fb950'}">${isEvent ? '+' : '-'}${premium.toFixed(4)} HYPE/hr</td>
-        <td>${weight} bps</td>
-      </tr>`);
-    } catch {}
+    rows.push(`<tr>
+      <td class="mono">${addr}</td>
+      <td>${fmt(ins.V)}</td>
+      <td style="color:${isEvent ? '#f85149' : '#3fb950'}">${isEvent ? '+' : '-'}${fmt(premium)} HYPE/hr</td>
+      <td>${w} bps</td>
+    </tr>`);
   }
 
   tbody.innerHTML = rows.length ? rows.join("") :
@@ -293,72 +167,57 @@ async function refreshFundingTable(rate, isEvent) {
 
 // ── Actions ─────────────────────────────────────────────────────────────
 
-async function doRegister() {
-  if (!signer) return logMsg("No signer — read-only mode", "error");
+function doRegister() {
   const addr = document.getElementById("regAddr").value.trim();
-  const vHype = document.getElementById("regV").value.trim();
-  const pi = document.getElementById("regPi").value.trim();
+  const V = parseFloat(document.getElementById("regV").value);
+  const pi = parseInt(document.getElementById("regPi").value);
 
-  if (!addr || !vHype || !pi) return logMsg("Fill all registration fields", "error");
+  if (!addr || !V || !pi) return logMsg("Fill all registration fields", "error");
 
   try {
-    const tx = await contract.register(addr, ethers.parseEther(vHype), BigInt(pi));
-    logMsg(`Register tx sent...`, "info");
-    await tx.wait();
-    logMsg(`Registered ${shortAddr(addr)} | V=${vHype} HYPE | pi=${pi} bps`, "success");
+    engine.register(addr, V, pi);
+    logMsg(`Registered ${addr} | V=${V} HYPE | pi=${pi} bps`, "success");
     refreshAll();
   } catch (e) {
-    logMsg("Register failed: " + parseError(e), "error");
+    logMsg("Register failed: " + e.message, "error");
   }
 }
 
-async function doDeregister() {
-  if (!signer) return logMsg("No signer — read-only mode", "error");
+function doDeregister() {
   const addr = document.getElementById("deregAddr").value.trim();
-  if (!addr) return logMsg("Enter address to deregister", "error");
+  if (!addr) return logMsg("Enter name to deregister", "error");
 
   try {
-    const tx = await contract.deregister(addr);
-    await tx.wait();
-    logMsg(`Deregistered ${shortAddr(addr)}`, "success");
+    engine.deregister(addr);
+    logMsg(`Deregistered ${addr}`, "success");
     refreshAll();
   } catch (e) {
-    logMsg("Deregister failed: " + parseError(e), "error");
+    logMsg("Deregister failed: " + e.message, "error");
   }
 }
 
-async function doTriggerEvent() {
-  if (!signer) return logMsg("No signer — read-only mode", "error");
+function doTriggerEvent() {
   const addr = document.getElementById("evtAddr").value.trim();
-  const lambda = document.getElementById("evtLambda").value.trim();
+  const lambda = parseInt(document.getElementById("evtLambda").value);
   if (!addr || !lambda) return logMsg("Fill event fields", "error");
 
   try {
-    const tx = await contract.triggerEvent(addr, BigInt(lambda));
-    await tx.wait();
-
-    // Read computed values
-    const oracle = Number(await contract.oracleValue6()) / 1e6;
-    const payout = ethers.formatEther(await contract.pendingPayout());
-    logMsg(`SLASH EVENT: ${shortAddr(addr)} | lambda=${lambda}bps | O(T*)=${oracle.toFixed(6)} | payout=${payout} HYPE`, "success");
+    const result = engine.triggerEvent(addr, lambda);
+    const oracle = (result.oracleValue6 / 1e6).toFixed(6);
+    logMsg(`SLASH EVENT: ${addr} | lambda=${lambda}bps | O(T*)=${oracle} | payout=${fmt(result.pendingPayout)} HYPE`, "success");
     refreshAll();
   } catch (e) {
-    logMsg("TriggerEvent failed: " + parseError(e), "error");
+    logMsg("TriggerEvent failed: " + e.message, "error");
   }
 }
 
-async function doRoutePayout() {
-  if (!signer) return logMsg("No signer — read-only mode", "error");
-
+function doRoutePayout() {
   try {
-    const target = await contract.eventInsured();
-    const amount = ethers.formatEther(await contract.pendingPayout());
-    const tx = await contract.routePayout();
-    await tx.wait();
-    logMsg(`Payout routed: ${amount} HYPE to ${shortAddr(target)}`, "success");
+    const result = engine.routePayout();
+    logMsg(`Payout routed: ${fmt(result.amount)} HYPE to ${result.target}`, "success");
     refreshAll();
   } catch (e) {
-    logMsg("RoutePayout failed: " + parseError(e), "error");
+    logMsg("RoutePayout failed: " + e.message, "error");
   }
 }
 
@@ -374,21 +233,8 @@ function logMsg(msg, type) {
   while (el.children.length > 100) el.removeChild(el.lastChild);
 }
 
-function parseError(e) {
-  if (e.reason) return e.reason;
-  if (e.data?.message) return e.data.message;
-  const match = e.message?.match(/reason="([^"]+)"/);
-  if (match) return match[1];
-  if (e.info?.error?.message) return e.info.error.message;
-  return e.message || String(e);
-}
-
-function shortAddr(addr) {
-  return addr.slice(0, 8) + "..." + addr.slice(-6);
-}
-
-function fmtEth(wei) {
-  return parseFloat(ethers.formatEther(wei)).toFixed(4);
+function fmt(n) {
+  return Number(n).toFixed(4);
 }
 
 // ── Start ───────────────────────────────────────────────────────────────
