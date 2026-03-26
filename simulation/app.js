@@ -9,12 +9,11 @@ function init() {
   engine.seed();
 
   // Editable inputs that trigger recalc
-  for (const id of ["markPriceInput", "fMaxInput", "longMarginInput", "lMaxInput", "shortMarginInput"]) {
+  for (const id of ["markPriceInput", "fMaxInput"]) {
     document.getElementById(id).addEventListener("input", refreshAll);
   }
 
   document.getElementById("addBtn").addEventListener("click", doAdd);
-  document.getElementById("setBalanceBtn").addEventListener("click", doSetBalance);
   document.getElementById("routePayoutBtn").addEventListener("click", doRoutePayout);
   document.getElementById("slashConfirmBtn").addEventListener("click", doSlashConfirm);
   document.getElementById("slashCancelBtn").addEventListener("click", closeSlashModal);
@@ -46,7 +45,6 @@ function refreshAll() {
 
   refreshInsuredTable();
   refreshEventBar();
-  refreshPositions();
   refreshFunding();
 }
 
@@ -150,47 +148,6 @@ function doSlashConfirm() {
   } catch (e) {
     logMsg("Slash failed: " + e.message, "error");
   }
-}
-
-// ── Positions ───────────────────────────────────────────────────────────
-
-function refreshPositions() {
-  const s = engine.state;
-  const longMargin = parseFloat(document.getElementById("longMarginInput").value) || 0;
-  const lMax = parseInt(document.getElementById("lMaxInput").value) || 5;
-  const shortMargin = parseFloat(document.getElementById("shortMarginInput").value) || 0;
-  const fMaxBps = parseInt(document.getElementById("fMaxInput").value) || F_MAX_DEFAULT_BPS;
-  const fMax = fMaxBps / 10000;
-
-  const notional = s.V_pool;
-  document.getElementById("longNotional").textContent = fmt(notional) + " HYPE";
-  const longLev = longMargin > 0 ? (notional / longMargin) : 0;
-  document.getElementById("longLeverage").textContent = longLev > 0 ? longLev.toFixed(2) + "x" : "-";
-  const requiredMargin = lMax > 0 ? notional / lMax : 0;
-  document.getElementById("longRequiredMargin").textContent = fmt(requiredMargin) + " HYPE";
-  const covered = longMargin >= requiredMargin && requiredMargin > 0;
-  document.getElementById("longCoverage").textContent = covered ? "COVERED" : "UNDERCOVERED";
-  document.getElementById("longCoverage").style.color = covered ? "#3fb950" : "#f85149";
-
-  document.getElementById("shortNotional").textContent = fmt(notional) + " HYPE";
-  const shortLev = shortMargin > 0 ? (notional / shortMargin) : 0;
-  document.getElementById("shortLeverage").textContent = shortLev > 0 ? shortLev.toFixed(2) + "x" : "-";
-
-  let maxV = 0;
-  for (const addr of s.insuredList) {
-    const ins = s.insureds.get(addr);
-    if (ins && ins.active && ins.V > maxV) maxV = ins.V;
-  }
-  const worstOracle = notional > 0 ? maxV / notional : 0;
-  const worstNStar = fMax > 0 ? Math.ceil(worstOracle / fMax) : 0;
-  const worstTotal = notional * fMax * worstNStar;
-  document.getElementById("shortWorstCase").textContent =
-    fmt(worstTotal) + " HYPE over " + worstNStar + "hr";
-  const survives = shortMargin >= worstTotal;
-  document.getElementById("shortSurvival").textContent = survives ? "YES" : "NO — liquidation risk";
-  document.getElementById("shortSurvival").style.color = survives ? "#3fb950" : "#f85149";
-
-  document.getElementById("maxPayout").textContent = fmt(s.balance) + " HYPE";
 }
 
 // ── Funding ─────────────────────────────────────────────────────────────
@@ -319,14 +276,6 @@ function doRemove(addr) {
   } catch (e) {
     logMsg("Remove failed: " + e.message, "error");
   }
-}
-
-function doSetBalance() {
-  const val = parseFloat(document.getElementById("balanceInput").value);
-  if (isNaN(val) || val < 0) return logMsg("Enter a valid balance", "error");
-  engine.state.balance = val;
-  logMsg(`Reserve set to ${fmt(val)} HYPE`, "info");
-  refreshAll();
 }
 
 function doRoutePayout() {
