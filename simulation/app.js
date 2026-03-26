@@ -39,7 +39,6 @@ function refreshAll() {
   document.getElementById("piPool").textContent = Math.round(engine.piPoolWeighted()) + " bps";
   document.getElementById("piVPool").textContent = fmtInt(s.piV_pool);
   document.getElementById("insuredCount").textContent = activeCount();
-  document.getElementById("contractBal").textContent = fmt(s.balance) + " HYPE";
   document.getElementById("eventActiveFlag").textContent = s.eventActive ? "YES" : "No";
   document.getElementById("eventActiveFlag").style.color = s.eventActive ? "#f85149" : "#3fb950";
 
