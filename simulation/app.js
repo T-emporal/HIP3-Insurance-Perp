@@ -174,7 +174,7 @@ function refreshFunding() {
     const capped = Math.min(fundingRate, fMax);
     document.getElementById("fundingRate").textContent =
       (capped * 100).toFixed(4) + "%/hr" + (fundingRate > fMax ? " (capped)" : "");
-    document.getElementById("fundingDirection").textContent = "Insureds → LP Shorts (premium)";
+    document.getElementById("fundingDirection").textContent = "Longs (Insureds) → Shorts (Insurers)";
     document.getElementById("fundingDirection").style.color = "#3fb950";
 
     document.getElementById("poolPremiumHr").textContent = fmt(s.V_pool * capped) + " HYPE (earned)";
@@ -194,7 +194,7 @@ function refreshFunding() {
 
     document.getElementById("fundingRate").textContent =
       (-fMax * 100).toFixed(4) + "%/hr (at -f_max)";
-    document.getElementById("fundingDirection").textContent = "LP Shorts → Insureds (payout)";
+    document.getElementById("fundingDirection").textContent = "Shorts (Insurers) → Longs (Insureds)";
     document.getElementById("fundingDirection").style.color = "#f85149";
 
     const perInterval = s.V_snap * fMax;

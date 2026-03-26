@@ -131,7 +131,7 @@ const engine = (() => {
       register(v.addr, v.V, v.pi);
     }
 
-    // Simulated balance (LP funding inflows available for payouts)
+    // Simulated balance (funding inflows from shorts during events)
     state.balance = 500;
 
     return validators;

@@ -144,9 +144,9 @@
   </div>
 
 
-  <!-- ═══════════ LP / SHORTS PERSPECTIVE ═══════════ -->
+  <!-- ═══════════ SHORTS (INSURERS) PERSPECTIVE ═══════════ -->
 
-  <div class="section-label">Perpetual (LP Shorts provide reinsurance capital)</div>
+  <div class="section-label">Perpetual (Shorts provide reinsurance capital)</div>
 
   <div id="lp" class="panel">
     <h2>Funding Flows</h2>
@@ -156,8 +156,9 @@
         <input id="markPriceInput" type="text" value="0.005" style="width:80px" class="editable-input" title="0.005 = market thinks 0.5% risk" />
       </div>
       <div>
-        <span class="label">f_max</span>
-        <input id="fMaxInput" type="text" value="0.1" style="width:60px" class="editable-input" /> %
+        <span class="label">f_max (HL constant)</span>
+        <span id="fMaxDisplay">0.1%</span>
+        <input id="fMaxInput" type="hidden" value="0.1" />
       </div>
       <div><span class="label">Funding Rate f(t)</span><span id="fundingRate">-</span></div>
       <div><span class="label">Direction</span><span id="fundingDirection">-</span></div>
@@ -165,11 +166,11 @@
 
     <div class="grid-2" style="margin-top:12px">
       <div>
-        <h3 class="sub-header">LP Shorts Earn (Normal) / Pay (Event)</h3>
+        <h3 class="sub-header">Shorts (Insurers) Earn (Normal) / Pay (Event)</h3>
         <div class="info-grid">
           <div><span class="label">Total / hr</span><span id="poolPremiumHr">-</span></div>
           <div id="lpNStarRow" style="display:none"><span class="label">Payout window (N*)</span><span id="oracleNStar">-</span></div>
-          <div id="lpTotalRow" style="display:none"><span class="label">Total LP obligation</span><span id="totalFromLPs">-</span></div>
+          <div id="lpTotalRow" style="display:none"><span class="label">Total short obligation</span><span id="totalFromLPs">-</span></div>
           <div id="lpExcessRow" style="display:none"><span class="label">Ceiling excess</span><span id="ceilingExcess">-</span></div>
         </div>
         <div id="eventFundingInfo" style="display:none; margin-top:8px">
