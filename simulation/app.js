@@ -1,6 +1,6 @@
 /* HIP3 Apportionment Layer — Static Simulation UI */
 
-const F_MAX_DEFAULT_BPS = 10;
+const F_MAX_DEFAULT_PCT = 0.1; // 0.1% = 10 bps
 let slashTarget = null;
 
 // ── Init ────────────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ function refreshAll() {
   const s = engine.state;
 
   document.getElementById("vPool").textContent = fmt(s.V_pool) + " HYPE";
-  document.getElementById("piPool").textContent = Math.round(engine.piPoolWeighted()) + " bps";
+  document.getElementById("piPool").textContent = bpsToP(engine.piPoolWeighted()) + "%";
   document.getElementById("piVPool").textContent = fmtInt(s.piV_pool);
   document.getElementById("insuredCount").textContent = activeCount();
   document.getElementById("eventActiveFlag").textContent = s.eventActive ? "YES" : "No";
@@ -57,8 +57,8 @@ function refreshInsuredTable() {
   const s = engine.state;
   const tbody = document.getElementById("insuredBody");
   const markPrice = parseFloat(document.getElementById("markPriceInput").value) || 0;
-  const fMaxBps = parseInt(document.getElementById("fMaxInput").value) || F_MAX_DEFAULT_BPS;
-  const fMax = fMaxBps / 10000;
+  const fMaxPct = parseFloat(document.getElementById("fMaxInput").value) || F_MAX_DEFAULT_PCT;
+  const fMax = fMaxPct / 100;
   const rate = s.eventActive ? fMax : Math.min(markPrice - 0.0001, fMax);
   const rows = [];
 
@@ -79,9 +79,9 @@ function refreshInsuredTable() {
     rows.push(`<tr class="${!ins.active ? 'row-inactive' : ''}">
       <td class="mono"><span class="tag">${addr}</span></td>
       <td>${fmt(ins.V)}</td>
-      <td>${ins.pi}</td>
+      <td>${bpsToP(ins.pi)}%</td>
       <td>${fmtInt(viPi)}</td>
-      <td>${w}</td>
+      <td>${bpsToP(w)}%</td>
       <td style="color:${ins.active ? premColor : '#8b949e'}">${ins.active ? premSign + fmt(premium) + ' /hr' : '—'}</td>
       <td>${actions}</td>
     </tr>`);
@@ -108,7 +108,7 @@ function refreshEventBar() {
   el.style.display = "block";
 
   document.getElementById("evtInsured").textContent = s.eventInsured;
-  document.getElementById("evtLambdaVal").textContent = s.eventLambdaBps;
+  document.getElementById("evtLambdaVal").textContent = bpsToP(s.eventLambdaBps);
   document.getElementById("evtVSnap").textContent = fmt(s.V_snap) + " HYPE";
   document.getElementById("evtOracle").textContent = (s.oracleValue6 / 1e6).toFixed(6);
   document.getElementById("evtPayout").textContent = fmt(s.pendingPayout) + " HYPE";
@@ -135,13 +135,14 @@ function closeSlashModal() {
 
 function doSlashConfirm() {
   if (!slashTarget) return;
-  const lambda = parseInt(document.getElementById("slashLambda").value);
-  if (!lambda) return logMsg("Enter λ_i in basis points", "error");
+  const lambdaPct = parseFloat(document.getElementById("slashLambda").value);
+  if (!lambdaPct) return logMsg("Enter λ_i as a percentage", "error");
+  const lambdaBps = Math.round(lambdaPct * 100); // convert % to bps for engine
 
   try {
-    const result = engine.triggerEvent(slashTarget, lambda);
+    const result = engine.triggerEvent(slashTarget, lambdaBps);
     const oracle = (result.oracleValue6 / 1e6).toFixed(6);
-    logMsg(`SLASH: ${slashTarget} | λ=${lambda}bps | O(T*)=${oracle} | payout=${fmt(result.pendingPayout)} HYPE`, "success");
+    logMsg(`SLASH: ${slashTarget} | λ=${lambdaPct}% | O(T*)=${oracle} | payout=${fmt(result.pendingPayout)} HYPE`, "success");
     closeSlashModal();
     refreshAll();
   } catch (e) {
@@ -155,8 +156,8 @@ function refreshFunding() {
   const s = engine.state;
   const stateEl = document.getElementById("oracleState");
   const priceEl = document.getElementById("oraclePrice");
-  const fMaxBps = parseInt(document.getElementById("fMaxInput").value) || F_MAX_DEFAULT_BPS;
-  const fMax = fMaxBps / 10000;
+  const fMaxPct = parseFloat(document.getElementById("fMaxInput").value) || F_MAX_DEFAULT_PCT;
+  const fMax = fMaxPct / 100;
   const markPrice = parseFloat(document.getElementById("markPriceInput").value) || 0;
 
   const lpNStarRow = document.getElementById("lpNStarRow");
@@ -172,7 +173,7 @@ function refreshFunding() {
     const fundingRate = markPrice - 0.0001;
     const capped = Math.min(fundingRate, fMax);
     document.getElementById("fundingRate").textContent =
-      (capped * 10000).toFixed(2) + " bps/hr" + (fundingRate > fMax ? " (capped)" : "");
+      (capped * 100).toFixed(4) + "%/hr" + (fundingRate > fMax ? " (capped)" : "");
     document.getElementById("fundingDirection").textContent = "Insureds → LP Shorts (premium)";
     document.getElementById("fundingDirection").style.color = "#3fb950";
 
@@ -192,7 +193,7 @@ function refreshFunding() {
     priceEl.textContent = oracle.toFixed(6);
 
     document.getElementById("fundingRate").textContent =
-      (-fMax * 10000).toFixed(2) + " bps/hr (at -f_max)";
+      (-fMax * 100).toFixed(4) + "%/hr (at -f_max)";
     document.getElementById("fundingDirection").textContent = "LP Shorts → Insureds (payout)";
     document.getElementById("fundingDirection").style.color = "#f85149";
 
@@ -237,7 +238,7 @@ function refreshFundingTable(rate, isEvent) {
       <td class="mono">${addr}</td>
       <td>${fmt(ins.V)}</td>
       <td style="color:${color}">${sign}${fmt(flow)}</td>
-      <td>${w}</td>
+      <td>${bpsToP(w)}%</td>
     </tr>`);
   }
 
@@ -250,13 +251,14 @@ function refreshFundingTable(rate, isEvent) {
 function doAdd() {
   const addr = document.getElementById("addName").value.trim();
   const V = parseFloat(document.getElementById("addV").value);
-  const pi = parseInt(document.getElementById("addPi").value);
+  const piPct = parseFloat(document.getElementById("addPi").value);
 
-  if (!addr || !V || !pi) return logMsg("Fill name, V_i, and π_i to add", "error");
+  if (!addr || !V || !piPct) return logMsg("Fill name, V_i, and π_i to add", "error");
+  const piBps = Math.round(piPct * 100); // convert % to bps for engine
 
   try {
-    engine.register(addr, V, pi);
-    logMsg(`+ ${addr} | V=${V} HYPE | π=${pi} bps`, "success");
+    engine.register(addr, V, piBps);
+    logMsg(`+ ${addr} | V=${V} HYPE | π=${piPct}%`, "success");
     document.getElementById("addName").value = "";
     document.getElementById("addV").value = "";
     document.getElementById("addPi").value = "";
@@ -301,6 +303,7 @@ function logMsg(msg, type) {
 
 function fmt(n) { return Number(n).toFixed(4); }
 function fmtInt(n) { return Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }); }
+function bpsToP(bps) { return (bps / 100).toFixed(2); }
 
 // ── Start ───────────────────────────────────────────────────────────────
 

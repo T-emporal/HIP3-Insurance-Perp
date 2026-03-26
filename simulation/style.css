@@ -189,7 +189,10 @@ details summary { cursor: pointer; }
 details summary h2 { margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
 details[open] summary h2 { border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 12px; }
 .glossary-table td:first-child { font-family: 'SF Mono', monospace; color: var(--accent); white-space: nowrap; }
-.glossary-table td:nth-child(3) { color: var(--text-dim); font-size: 0.85em; white-space: nowrap; }
+.glossary-table td:nth-child(4) { color: var(--text-dim); font-size: 0.85em; white-space: nowrap; }
+.type-input { color: var(--warning); font-weight: 600; font-size: 0.8em; }
+.type-output { color: var(--text-dim); font-size: 0.8em; }
+.type-const { color: var(--accent); font-size: 0.8em; }
 
 .section-label {
   font-size: 0.75em;
