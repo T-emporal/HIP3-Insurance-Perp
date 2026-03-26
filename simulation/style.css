@@ -190,3 +190,46 @@ details summary h2 { margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
 details[open] summary h2 { border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 12px; }
 .glossary-table td:first-child { font-family: 'SF Mono', monospace; color: var(--accent); white-space: nowrap; }
 .glossary-table td:nth-child(3) { color: var(--text-dim); font-size: 0.85em; white-space: nowrap; }
+
+.section-label {
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  margin: 20px 0 8px;
+  padding-left: 4px;
+}
+
+.hint-panel {
+  background: #1f6feb15;
+  border-color: var(--accent);
+  font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sub-header {
+  font-size: 0.85em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.row-inactive { opacity: 0.5; }
+
+select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 0.9em;
+  font-family: inherit;
+  flex: 1;
+  min-width: 120px;
+}
+select:focus { border-color: var(--accent); outline: none; }
+
+h3 { font-size: 0.95em; }
