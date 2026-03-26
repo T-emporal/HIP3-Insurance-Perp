@@ -244,3 +244,37 @@ h3 { font-size: 0.95em; }
   font-family: 'SF Mono', monospace;
 }
 .editable-input:focus { border-color: var(--accent); border-style: solid; outline: none; }
+
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+.modal {
+  min-width: 320px; max-width: 420px;
+}
+
+.event-bar {
+  border-color: var(--danger);
+  background: #f8514910;
+}
+
+.add-row td { border-bottom: none; padding-top: 12px; }
+.add-row input { font-size: 0.85em; }
+
+.btn-icon {
+  padding: 2px 8px;
+  font-size: 0.85em;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  margin: 0 2px;
+}
+.btn-icon:hover { border-color: var(--accent); }
+.btn-icon.remove { color: var(--danger); }
+.btn-icon.remove:hover { background: var(--danger); color: #fff; }
+.btn-icon.slash { color: var(--warning); }
+.btn-icon.slash:hover { background: var(--warning); color: #000; }

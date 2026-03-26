@@ -1,30 +1,34 @@
 /* HIP3 Apportionment Layer — Static Simulation UI */
 
 const F_MAX_DEFAULT_BPS = 10;
-let seedData;
+let slashTarget = null;
 
 // ── Init ────────────────────────────────────────────────────────────────
 
 function init() {
-  seedData = engine.seed();
+  engine.seed();
 
-  document.getElementById("registerBtn").addEventListener("click", doRegister);
-  document.getElementById("deregisterBtn").addEventListener("click", doDeregister);
-  document.getElementById("triggerBtn").addEventListener("click", doTriggerEvent);
-  document.getElementById("routePayoutBtn").addEventListener("click", doRoutePayout);
-  document.getElementById("markPriceInput").addEventListener("input", refreshAll);
-  document.getElementById("fMaxInput").addEventListener("input", refreshAll);
-  document.getElementById("longMarginInput").addEventListener("input", refreshAll);
-  document.getElementById("lMaxInput").addEventListener("input", refreshAll);
-  document.getElementById("shortMarginInput").addEventListener("input", refreshAll);
+  // Editable inputs that trigger recalc
+  for (const id of ["markPriceInput", "fMaxInput", "longMarginInput", "lMaxInput", "shortMarginInput"]) {
+    document.getElementById(id).addEventListener("input", refreshAll);
+  }
+
+  document.getElementById("addBtn").addEventListener("click", doAdd);
   document.getElementById("setBalanceBtn").addEventListener("click", doSetBalance);
+  document.getElementById("routePayoutBtn").addEventListener("click", doRoutePayout);
+  document.getElementById("slashConfirmBtn").addEventListener("click", doSlashConfirm);
+  document.getElementById("slashCancelBtn").addEventListener("click", closeSlashModal);
   document.getElementById("dismissHint").addEventListener("click", () => {
     document.getElementById("walkthrough").style.display = "none";
   });
 
+  // Enter key in add row
+  for (const id of ["addName", "addV", "addPi"]) {
+    document.getElementById(id).addEventListener("keydown", e => { if (e.key === "Enter") doAdd(); });
+  }
+
   refreshAll();
-  logMsg("Simulation loaded — 3 validators pre-registered, 500 HYPE payout reserve", "success");
-  logMsg("Try: set mark price, then trigger a slash event on any insured", "info");
+  logMsg("3 validators pre-loaded, 500 HYPE reserve. Try slashing one.", "success");
 }
 
 // ── Refresh ─────────────────────────────────────────────────────────────
@@ -40,9 +44,8 @@ function refreshAll() {
   document.getElementById("eventActiveFlag").textContent = s.eventActive ? "YES" : "No";
   document.getElementById("eventActiveFlag").style.color = s.eventActive ? "#f85149" : "#3fb950";
 
-  refreshDropdowns();
   refreshInsuredTable();
-  refreshEventInfo();
+  refreshEventBar();
   refreshPositions();
   refreshFunding();
 }
@@ -51,32 +54,16 @@ function activeCount() {
   return engine.state.insuredList.filter(a => engine.state.insureds.get(a)?.active).length;
 }
 
-function refreshDropdowns() {
-  const s = engine.state;
-  const active = s.insuredList.filter(a => s.insureds.get(a)?.active);
-
-  const deregSelect = document.getElementById("deregAddr");
-  const evtSelect = document.getElementById("evtAddr");
-  const prevDeregVal = deregSelect.value;
-  const prevEvtVal = evtSelect.value;
-
-  deregSelect.innerHTML = '<option value="">Select insured...</option>' +
-    active.map(a => `<option value="${a}">${a}</option>`).join("");
-  evtSelect.innerHTML = '<option value="">Select insured...</option>' +
-    active.map(a => `<option value="${a}">${a}</option>`).join("");
-
-  if (active.includes(prevDeregVal)) deregSelect.value = prevDeregVal;
-  if (active.includes(prevEvtVal)) evtSelect.value = prevEvtVal;
-}
+// ── Insured Table (inline controls) ─────────────────────────────────────
 
 function refreshInsuredTable() {
   const s = engine.state;
   const tbody = document.getElementById("insuredBody");
-  const rows = [];
   const markPrice = parseFloat(document.getElementById("markPriceInput").value) || 0;
   const fMaxBps = parseInt(document.getElementById("fMaxInput").value) || F_MAX_DEFAULT_BPS;
   const fMax = fMaxBps / 10000;
   const rate = s.eventActive ? fMax : Math.min(markPrice - 0.0001, fMax);
+  const rows = [];
 
   for (const addr of s.insuredList) {
     const ins = s.insureds.get(addr);
@@ -87,6 +74,11 @@ function refreshInsuredTable() {
     const premSign = s.eventActive ? "+" : "-";
     const premColor = s.eventActive ? "#f85149" : "#3fb950";
 
+    const actions = ins.active
+      ? `<button class="btn-icon slash" onclick="openSlashModal('${addr}')" title="Slash this insured">Slash</button>` +
+        `<button class="btn-icon remove" onclick="doRemove('${addr}')" title="Deregister">&minus;</button>`
+      : '<span style="color:#8b949e">removed</span>';
+
     rows.push(`<tr class="${!ins.active ? 'row-inactive' : ''}">
       <td class="mono"><span class="tag">${addr}</span></td>
       <td>${fmt(ins.V)}</td>
@@ -94,23 +86,25 @@ function refreshInsuredTable() {
       <td>${fmtInt(viPi)}</td>
       <td>${w}</td>
       <td style="color:${ins.active ? premColor : '#8b949e'}">${ins.active ? premSign + fmt(premium) + ' /hr' : '—'}</td>
-      <td style="color:${ins.active ? '#3fb950' : '#f85149'}">${ins.active ? 'Yes' : 'No'}</td>
+      <td>${actions}</td>
     </tr>`);
   }
 
   tbody.innerHTML = rows.length ? rows.join("") :
-    '<tr><td colspan="7" style="text-align:center;color:#8b949e">No insureds registered</td></tr>';
+    '<tr><td colspan="7" style="text-align:center;color:#8b949e">No insureds — add one below</td></tr>';
 }
 
-function refreshEventInfo() {
+// ── Event Bar ───────────────────────────────────────────────────────────
+
+function refreshEventBar() {
   const s = engine.state;
-  const el = document.getElementById("eventInfo");
+  const el = document.getElementById("eventBar");
 
   if (!s.eventActive) {
     el.style.display = "none";
     return;
   }
-  el.style.display = "grid";
+  el.style.display = "block";
 
   document.getElementById("evtInsured").textContent = s.eventInsured;
   document.getElementById("evtLambdaVal").textContent = s.eventLambdaBps;
@@ -118,6 +112,84 @@ function refreshEventInfo() {
   document.getElementById("evtOracle").textContent = (s.oracleValue6 / 1e6).toFixed(6);
   document.getElementById("evtPayout").textContent = fmt(s.pendingPayout) + " HYPE";
 }
+
+// ── Slash Modal ─────────────────────────────────────────────────────────
+
+function openSlashModal(addr) {
+  if (engine.state.eventActive) {
+    logMsg("Cannot slash — another event is active. Route payout first.", "error");
+    return;
+  }
+  slashTarget = addr;
+  document.getElementById("slashTarget").textContent = addr;
+  document.getElementById("slashLambda").value = "";
+  document.getElementById("slashModal").style.display = "flex";
+  document.getElementById("slashLambda").focus();
+}
+
+function closeSlashModal() {
+  document.getElementById("slashModal").style.display = "none";
+  slashTarget = null;
+}
+
+function doSlashConfirm() {
+  if (!slashTarget) return;
+  const lambda = parseInt(document.getElementById("slashLambda").value);
+  if (!lambda) return logMsg("Enter λ_i in basis points", "error");
+
+  try {
+    const result = engine.triggerEvent(slashTarget, lambda);
+    const oracle = (result.oracleValue6 / 1e6).toFixed(6);
+    logMsg(`SLASH: ${slashTarget} | λ=${lambda}bps | O(T*)=${oracle} | payout=${fmt(result.pendingPayout)} HYPE`, "success");
+    closeSlashModal();
+    refreshAll();
+  } catch (e) {
+    logMsg("Slash failed: " + e.message, "error");
+  }
+}
+
+// ── Positions ───────────────────────────────────────────────────────────
+
+function refreshPositions() {
+  const s = engine.state;
+  const longMargin = parseFloat(document.getElementById("longMarginInput").value) || 0;
+  const lMax = parseInt(document.getElementById("lMaxInput").value) || 5;
+  const shortMargin = parseFloat(document.getElementById("shortMarginInput").value) || 0;
+  const fMaxBps = parseInt(document.getElementById("fMaxInput").value) || F_MAX_DEFAULT_BPS;
+  const fMax = fMaxBps / 10000;
+
+  const notional = s.V_pool;
+  document.getElementById("longNotional").textContent = fmt(notional) + " HYPE";
+  const longLev = longMargin > 0 ? (notional / longMargin) : 0;
+  document.getElementById("longLeverage").textContent = longLev > 0 ? longLev.toFixed(2) + "x" : "-";
+  const requiredMargin = lMax > 0 ? notional / lMax : 0;
+  document.getElementById("longRequiredMargin").textContent = fmt(requiredMargin) + " HYPE";
+  const covered = longMargin >= requiredMargin && requiredMargin > 0;
+  document.getElementById("longCoverage").textContent = covered ? "COVERED" : "UNDERCOVERED";
+  document.getElementById("longCoverage").style.color = covered ? "#3fb950" : "#f85149";
+
+  document.getElementById("shortNotional").textContent = fmt(notional) + " HYPE";
+  const shortLev = shortMargin > 0 ? (notional / shortMargin) : 0;
+  document.getElementById("shortLeverage").textContent = shortLev > 0 ? shortLev.toFixed(2) + "x" : "-";
+
+  let maxV = 0;
+  for (const addr of s.insuredList) {
+    const ins = s.insureds.get(addr);
+    if (ins && ins.active && ins.V > maxV) maxV = ins.V;
+  }
+  const worstOracle = notional > 0 ? maxV / notional : 0;
+  const worstNStar = fMax > 0 ? Math.ceil(worstOracle / fMax) : 0;
+  const worstTotal = notional * fMax * worstNStar;
+  document.getElementById("shortWorstCase").textContent =
+    fmt(worstTotal) + " HYPE over " + worstNStar + "hr";
+  const survives = shortMargin >= worstTotal;
+  document.getElementById("shortSurvival").textContent = survives ? "YES" : "NO — liquidation risk";
+  document.getElementById("shortSurvival").style.color = survives ? "#3fb950" : "#f85149";
+
+  document.getElementById("maxPayout").textContent = fmt(s.balance) + " HYPE";
+}
+
+// ── Funding ─────────────────────────────────────────────────────────────
 
 function refreshFunding() {
   const s = engine.state;
@@ -127,14 +199,12 @@ function refreshFunding() {
   const fMax = fMaxBps / 10000;
   const markPrice = parseFloat(document.getElementById("markPriceInput").value) || 0;
 
-  // LP event-state rows
   const lpNStarRow = document.getElementById("lpNStarRow");
   const lpTotalRow = document.getElementById("lpTotalRow");
   const lpExcessRow = document.getElementById("lpExcessRow");
   const eventFundingEl = document.getElementById("eventFundingInfo");
 
   if (!s.eventActive) {
-    // ── NORMAL STATE ──
     stateEl.textContent = "NORMAL";
     stateEl.className = "badge badge-normal";
     priceEl.textContent = "0.0001 (keep-alive)";
@@ -146,8 +216,7 @@ function refreshFunding() {
     document.getElementById("fundingDirection").textContent = "Insureds → LP Shorts (premium)";
     document.getElementById("fundingDirection").style.color = "#3fb950";
 
-    const poolPremium = s.V_pool * capped;
-    document.getElementById("poolPremiumHr").textContent = fmt(poolPremium) + " HYPE (earned)";
+    document.getElementById("poolPremiumHr").textContent = fmt(s.V_pool * capped) + " HYPE (earned)";
 
     lpNStarRow.style.display = "none";
     lpTotalRow.style.display = "none";
@@ -156,7 +225,6 @@ function refreshFunding() {
 
     refreshFundingTable(capped, false);
   } else {
-    // ── EVENT STATE ──
     stateEl.textContent = "EVENT";
     stateEl.className = "badge badge-event";
 
@@ -204,12 +272,11 @@ function refreshFundingTable(rate, isEvent) {
     const w = Math.round(engine.premiumWeight(addr));
     const sign = isEvent ? "+" : "-";
     const color = isEvent ? "#f85149" : "#3fb950";
-    const label = isEvent ? "pays" : "earns";
 
     rows.push(`<tr>
       <td class="mono">${addr}</td>
       <td>${fmt(ins.V)}</td>
-      <td style="color:${color}" title="LP ${label} this from/to ${addr}">${sign}${fmt(flow)}</td>
+      <td style="color:${color}">${sign}${fmt(flow)}</td>
       <td>${w}</td>
     </tr>`);
   }
@@ -218,119 +285,50 @@ function refreshFundingTable(rate, isEvent) {
     '<tr><td colspan="4" style="text-align:center;color:#8b949e">No active insureds</td></tr>';
 }
 
-// ── Positions ───────────────────────────────────────────────────────────
+// ── Actions ─────────────────────────────────────────────────────────────
 
-function refreshPositions() {
-  const s = engine.state;
-  const longMargin = parseFloat(document.getElementById("longMarginInput").value) || 0;
-  const lMax = parseInt(document.getElementById("lMaxInput").value) || 5;
-  const shortMargin = parseFloat(document.getElementById("shortMarginInput").value) || 0;
-  const fMaxBps = parseInt(document.getElementById("fMaxInput").value) || F_MAX_DEFAULT_BPS;
-  const fMax = fMaxBps / 10000;
+function doAdd() {
+  const addr = document.getElementById("addName").value.trim();
+  const V = parseFloat(document.getElementById("addV").value);
+  const pi = parseInt(document.getElementById("addPi").value);
 
-  // Long position (apportionment layer)
-  const notional = s.V_pool;
-  document.getElementById("longNotional").textContent = fmt(notional) + " HYPE";
-  const longLev = longMargin > 0 ? (notional / longMargin) : 0;
-  document.getElementById("longLeverage").textContent = longLev > 0 ? longLev.toFixed(2) + "x" : "-";
-  const requiredMargin = lMax > 0 ? notional / lMax : 0;
-  document.getElementById("longRequiredMargin").textContent = fmt(requiredMargin) + " HYPE";
-  const covered = longMargin >= requiredMargin && requiredMargin > 0;
-  document.getElementById("longCoverage").textContent = covered ? "COVERED" : "UNDERCOVERED";
-  document.getElementById("longCoverage").style.color = covered ? "#3fb950" : "#f85149";
+  if (!addr || !V || !pi) return logMsg("Fill name, V_i, and π_i to add", "error");
 
-  // Short position (LPs)
-  document.getElementById("shortNotional").textContent = fmt(notional) + " HYPE";
-  const shortLev = shortMargin > 0 ? (notional / shortMargin) : 0;
-  document.getElementById("shortLeverage").textContent = shortLev > 0 ? shortLev.toFixed(2) + "x" : "-";
-
-  // Worst case: largest insured gets 100% slashed
-  let maxV = 0;
-  for (const addr of s.insuredList) {
-    const ins = s.insureds.get(addr);
-    if (ins && ins.active && ins.V > maxV) maxV = ins.V;
+  try {
+    engine.register(addr, V, pi);
+    logMsg(`+ ${addr} | V=${V} HYPE | π=${pi} bps`, "success");
+    document.getElementById("addName").value = "";
+    document.getElementById("addV").value = "";
+    document.getElementById("addPi").value = "";
+    refreshAll();
+  } catch (e) {
+    logMsg("Add failed: " + e.message, "error");
   }
-  // Worst case LP payout = maxV * 10000/10000 = maxV (100% slash on biggest insured)
-  // Over N* intervals, LP pays V_snap * f_max per interval
-  // N* = ceil(maxV / (V_pool * f_max * 10000 / 10000)) ... simplified:
-  // Total LP cost for worst case = maxV (the payout) + ceiling excess
-  const worstOracle = notional > 0 ? maxV / notional : 0;
-  const worstNStar = fMax > 0 ? Math.ceil(worstOracle / fMax) : 0;
-  const worstTotal = notional * fMax * worstNStar;
-  document.getElementById("shortWorstCase").textContent =
-    fmt(worstTotal) + " HYPE over " + worstNStar + "hr";
-
-  const survives = shortMargin >= worstTotal;
-  document.getElementById("shortSurvival").textContent = survives ? "YES" : "NO — liquidation risk";
-  document.getElementById("shortSurvival").style.color = survives ? "#3fb950" : "#f85149";
-
-  // Max payout the reserve can cover
-  document.getElementById("maxPayout").textContent = fmt(s.balance) + " HYPE";
 }
 
-// ── Actions ─────────────────────────────────────────────────────────────
+// Global — called from inline onclick
+function doRemove(addr) {
+  try {
+    engine.deregister(addr);
+    logMsg(`− ${addr} removed`, "success");
+    refreshAll();
+  } catch (e) {
+    logMsg("Remove failed: " + e.message, "error");
+  }
+}
 
 function doSetBalance() {
   const val = parseFloat(document.getElementById("balanceInput").value);
   if (isNaN(val) || val < 0) return logMsg("Enter a valid balance", "error");
   engine.state.balance = val;
-  logMsg(`Payout reserve set to ${fmt(val)} HYPE`, "info");
+  logMsg(`Reserve set to ${fmt(val)} HYPE`, "info");
   refreshAll();
-}
-
-
-function doRegister() {
-  const addr = document.getElementById("regAddr").value.trim();
-  const V = parseFloat(document.getElementById("regV").value);
-  const pi = parseInt(document.getElementById("regPi").value);
-
-  if (!addr || !V || !pi) return logMsg("Fill all registration fields", "error");
-
-  try {
-    engine.register(addr, V, pi);
-    logMsg(`Registered ${addr} | V=${V} HYPE | π=${pi} bps`, "success");
-    document.getElementById("regAddr").value = "";
-    document.getElementById("regV").value = "";
-    document.getElementById("regPi").value = "";
-    refreshAll();
-  } catch (e) {
-    logMsg("Register failed: " + e.message, "error");
-  }
-}
-
-function doDeregister() {
-  const addr = document.getElementById("deregAddr").value;
-  if (!addr) return logMsg("Select an insured to deregister", "error");
-
-  try {
-    engine.deregister(addr);
-    logMsg(`Deregistered ${addr}`, "success");
-    refreshAll();
-  } catch (e) {
-    logMsg("Deregister failed: " + e.message, "error");
-  }
-}
-
-function doTriggerEvent() {
-  const addr = document.getElementById("evtAddr").value;
-  const lambda = parseInt(document.getElementById("evtLambda").value);
-  if (!addr) return logMsg("Select an insured from the dropdown", "error");
-  if (!lambda) return logMsg("Enter lambda (loss fraction in bps)", "error");
-
-  try {
-    const result = engine.triggerEvent(addr, lambda);
-    const oracle = (result.oracleValue6 / 1e6).toFixed(6);
-    logMsg(`SLASH: ${addr} | λ=${lambda}bps | O(T*)=${oracle} | payout=${fmt(result.pendingPayout)} HYPE`, "success");
-    refreshAll();
-  } catch (e) {
-    logMsg("Trigger failed: " + e.message, "error");
-  }
 }
 
 function doRoutePayout() {
   try {
     const result = engine.routePayout();
-    logMsg(`Payout: ${fmt(result.amount)} HYPE sent to ${result.target}`, "success");
+    logMsg(`Payout: ${fmt(result.amount)} HYPE → ${result.target}`, "success");
     refreshAll();
   } catch (e) {
     logMsg("Route payout failed: " + e.message, "error");
