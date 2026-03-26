@@ -3,49 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HIP3 Insurance - Apportionment Layer Simulator</title>
+  <title>HIP3 Perpetual Insurance — Interactive Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
     <h1>HIP3 Perpetual Insurance</h1>
-    <p class="subtitle">Apportionment Layer Simulator</p>
+    <p class="subtitle">Interactive Simulator — no blockchain required</p>
   </header>
-
-  <div id="connection" class="panel">
-    <h2>Connection</h2>
-    <div class="connection-bar">
-      <div class="field">
-        <label>RPC URL</label>
-        <input id="rpcUrl" type="text" value="http://127.0.0.1:8545" />
-      </div>
-      <div class="field">
-        <label>Contract Address</label>
-        <input id="contractAddr" type="text" placeholder="Auto-detected from deploy-info.json" />
-      </div>
-      <button id="connectBtn" class="btn primary">Connect</button>
-    </div>
-    <div id="connStatus" class="status">Disconnected</div>
-    <div id="connInfo" class="info-grid" style="display:none">
-      <div><span class="label">Network</span><span id="networkName">-</span></div>
-      <div><span class="label">Chain ID</span><span id="chainId">-</span></div>
-      <div><span class="label">Owner</span><span id="ownerAddr" class="mono">-</span></div>
-      <div><span class="label">Contract Balance</span><span id="contractBal">-</span></div>
-      <div><span class="label">Block</span><span id="blockNum">-</span></div>
-    </div>
-  </div>
 
   <div class="grid-2">
     <div id="registry" class="panel">
       <h2>Registry</h2>
       <div class="form-row">
-        <input id="regAddr" type="text" placeholder="Insured address (0x...)" />
+        <input id="regAddr" type="text" placeholder="Name (e.g. MyValidator)" />
         <input id="regV" type="text" placeholder="V_i (HYPE)" />
         <input id="regPi" type="text" placeholder="pi_i (bps)" />
         <button id="registerBtn" class="btn">Register</button>
       </div>
       <div class="form-row">
-        <input id="deregAddr" type="text" placeholder="Address to deregister" />
+        <input id="deregAddr" type="text" placeholder="Name to deregister" />
         <button id="deregisterBtn" class="btn danger">Deregister</button>
       </div>
     </div>
@@ -56,6 +33,7 @@
         <div><span class="label">Insured Count</span><span id="insuredCount">0</span></div>
         <div><span class="label">V_pool</span><span id="vPool">0 HYPE</span></div>
         <div><span class="label">pi_pool (weighted)</span><span id="piPool">0 bps</span></div>
+        <div><span class="label">Contract Balance</span><span id="contractBal">0 HYPE</span></div>
         <div><span class="label">Event Active</span><span id="eventActiveFlag">No</span></div>
       </div>
     </div>
@@ -66,7 +44,7 @@
     <table>
       <thead>
         <tr>
-          <th>Address</th>
+          <th>Name</th>
           <th>V_i (HYPE)</th>
           <th>pi_i (bps)</th>
           <th>Weight (bps)</th>
@@ -80,7 +58,7 @@
   <div id="event" class="panel">
     <h2>Slash Event</h2>
     <div class="form-row">
-      <input id="evtAddr" type="text" placeholder="Slashed insured address" />
+      <input id="evtAddr" type="text" placeholder="Insured name (e.g. LowRisk-Validator)" />
       <input id="evtLambda" type="text" placeholder="lambda_i (bps)" />
       <button id="triggerBtn" class="btn danger">Trigger Event</button>
       <button id="routePayoutBtn" class="btn primary">Route Payout</button>
@@ -96,7 +74,7 @@
 
   <div id="oracle" class="panel">
     <h2>Perpetual Funding</h2>
-    <p class="help">Oracle from contract + mark price you set → funding rate + per-insured flows</p>
+    <p class="help">Oracle from contract state + mark price you set = funding rate + per-insured flows</p>
     <div class="info-grid">
       <div><span class="label">State</span><span id="oracleState" class="badge badge-normal">NORMAL</span></div>
       <div><span class="label">Oracle O(t)</span><span id="oraclePrice">0.0001</span></div>
@@ -139,9 +117,9 @@
     </div>
   </div>
 
-  <div id="seedPanel" class="panel" style="display:none">
-    <h2>Pre-loaded Test Accounts</h2>
-    <p class="help">These addresses were seeded during deployment. Copy-paste into the forms above.</p>
+  <div id="seedPanel" class="panel">
+    <h2>Pre-loaded Test Validators</h2>
+    <p class="help">These names are pre-registered. Type them into the Slash Event field to test.</p>
     <pre id="seedHints" class="mono" style="white-space:pre-wrap; font-size:0.85em; color:#c9d1d9; background:#0d1117; padding:8px; border-radius:4px"></pre>
   </div>
 
@@ -150,7 +128,7 @@
     <div id="logEntries" class="log-entries"></div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+  <script src="engine.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
