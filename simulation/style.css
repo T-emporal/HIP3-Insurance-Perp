@@ -161,6 +161,15 @@ td.mono { font-family: 'SF Mono', monospace; font-size: 0.8em; }
   width: 0%;
 }
 
+.tag {
+  background: #1f6feb33;
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.8em;
+  margin-right: 4px;
+}
+
 .log-entries {
   max-height: 300px;
   overflow-y: auto;
