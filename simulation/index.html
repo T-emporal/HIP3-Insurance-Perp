@@ -15,10 +15,10 @@
   <!-- Walkthrough hint -->
   <div id="walkthrough" class="panel hint-panel">
     <strong>Try this:</strong>
-    1. Set a mark price below (e.g. 0.005 = market thinks 0.5% risk)
-    &rarr; 2. Pick an insured from the dropdown and trigger a slash event
+    1. Scroll down and set a mark price (e.g. 0.005 = 0.5% risk)
+    &rarr; 2. Click <em>Slash</em> on any insured in the table
     &rarr; 3. Watch the oracle flip, funding reverse, and payout compute
-    &rarr; 4. Route the payout
+    &rarr; 4. Click <em>Route Payout</em> in the event bar
     <button id="dismissHint" class="btn" style="margin-left:12px; padding:2px 10px">Got it</button>
   </div>
 
@@ -60,6 +60,7 @@
   <div id="insuredTable" class="panel">
     <h2>Registered Insureds</h2>
     <p class="help">Click + to add, &minus; to remove, or Slash to trigger an event. Premium is apportioned by risk-weighted share.</p>
+    <div style="overflow-x:auto">
     <table>
       <thead>
         <tr>
@@ -83,6 +84,7 @@
         </tr>
       </tfoot>
     </table>
+    </div>
   </div>
 
   <!-- Slash modal -->
