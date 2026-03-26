@@ -233,3 +233,14 @@ select {
 select:focus { border-color: var(--accent); outline: none; }
 
 h3 { font-size: 0.95em; }
+
+.editable-input {
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  color: var(--warning);
+  padding: 2px 6px;
+  font-size: 0.9em;
+  font-family: 'SF Mono', monospace;
+}
+.editable-input:focus { border-color: var(--accent); border-style: solid; outline: none; }
