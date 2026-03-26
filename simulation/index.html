@@ -48,7 +48,7 @@
         <tr><td>Payout</td><td>Loss compensation</td><td>HYPE</td><td>V_i · λ_i — exact amount owed to slashed insured</td></tr>
         <tr><td>Ceiling excess</td><td>Rounding surplus</td><td>HYPE</td><td>V_snap · N* · f_max − V_i · λ_i — always ≥ 0, accumulates as buffer</td></tr>
         <tr><td>M_i</td><td>Required margin</td><td>HYPE</td><td>V_i / L_max — minimum margin the layer must post per insured</td></tr>
-        <tr><td>L_max</td><td>Leverage cap</td><td>integer</td><td>⌊1 / ΔP_max⌋ — policy choice by pool operator (not shown in sim)</td></tr>
+        <tr><td>L_max</td><td>Leverage cap</td><td>integer</td><td>⌊1 / ΔP_max⌋ — policy choice by pool operator. Editable in Long Position panel</td></tr>
       </tbody>
     </table>
   </details>
@@ -88,7 +88,6 @@
         <div><span class="label">V_pool (Σ V_i)</span><span id="vPool">0 HYPE</span></div>
         <div><span class="label">π_pool (weighted)</span><span id="piPool">0 bps</span></div>
         <div><span class="label">Σ(V_i · π_i)</span><span id="piVPool">0</span></div>
-        <div><span class="label">Payout Reserve</span><span id="contractBal">0 HYPE</span></div>
         <div><span class="label">Event Active</span><span id="eventActiveFlag">No</span></div>
       </div>
     </div>
@@ -100,6 +99,40 @@
         <div><span class="label">Mode</span><span id="oracleState" class="badge badge-normal">NORMAL</span></div>
         <div><span class="label">Oracle O(t)</span><span id="oraclePrice">0.0001</span></div>
         <div><span class="label">Δt</span><span>1 hour</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <h2>Long Position (Layer)</h2>
+      <p class="help">The apportionment layer's single long position on the perp</p>
+      <div class="info-grid">
+        <div><span class="label">Notional</span><span id="longNotional">0 HYPE</span></div>
+        <div>
+          <span class="label">Margin posted</span>
+          <input id="longMarginInput" type="text" value="200" style="width:70px" class="editable-input" /> HYPE
+        </div>
+        <div><span class="label">Effective leverage</span><span id="longLeverage">-</span></div>
+        <div>
+          <span class="label">L_max (cap)</span>
+          <input id="lMaxInput" type="text" value="5" style="width:40px" class="editable-input" />
+        </div>
+        <div><span class="label">Required margin (V_pool / L_max)</span><span id="longRequiredMargin">-</span></div>
+        <div><span class="label">Coverage status</span><span id="longCoverage">-</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Payout Reserve</h2>
+      <p class="help">Simulated contract balance — funding inflows from LP shorts during events</p>
+      <div class="info-grid">
+        <div>
+          <span class="label">Balance</span>
+          <input id="balanceInput" type="text" value="500" style="width:70px" class="editable-input" /> HYPE
+          <button id="setBalanceBtn" class="btn" style="padding:2px 8px;margin-left:4px">Set</button>
+        </div>
+        <div><span class="label">Max single payout</span><span id="maxPayout">-</span></div>
       </div>
     </div>
   </div>
@@ -141,16 +174,41 @@
 
   <div class="section-label">LP Shorts (Reinsurance Capital)</div>
 
+  <div class="grid-2">
+    <div class="panel">
+      <h2>Short Position (LPs)</h2>
+      <p class="help">Collective LP short position — mirrors the long</p>
+      <div class="info-grid">
+        <div><span class="label">Notional</span><span id="shortNotional">0 HYPE</span></div>
+        <div>
+          <span class="label">Total LP margin</span>
+          <input id="shortMarginInput" type="text" value="200" style="width:70px" class="editable-input" /> HYPE
+        </div>
+        <div><span class="label">Effective leverage</span><span id="shortLeverage">-</span></div>
+        <div><span class="label">Worst-case event exposure</span><span id="shortWorstCase">-</span></div>
+        <div><span class="label">Survives max event?</span><span id="shortSurvival">-</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Market Parameters</h2>
+      <p class="help">Editable — adjust to stress test</p>
+      <div class="info-grid">
+        <div>
+          <span class="label">Mark Price P(t)</span>
+          <input id="markPriceInput" type="text" value="0.005" style="width:80px" class="editable-input" title="0.005 = market thinks 0.5% risk" />
+        </div>
+        <div>
+          <span class="label">f_max</span>
+          <input id="fMaxInput" type="text" value="10" style="width:60px" class="editable-input" /> bps
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="lp" class="panel">
-    <h2>Perpetual Funding</h2>
+    <h2>Funding Flows</h2>
     <div class="info-grid">
-      <div>
-        <span class="label">Mark Price P(t)</span>
-        <input id="markPriceInput" type="text" value="0.005" style="width:80px" title="Market consensus on pool risk. e.g. 0.005 = 0.5% expected loss" />
-      </div>
-      <div><span class="label">f_max</span>
-        <input id="fMaxInput" type="text" value="10" style="width:60px" /> bps
-      </div>
       <div><span class="label">Funding Rate f(t)</span><span id="fundingRate">-</span></div>
       <div><span class="label">Direction</span><span id="fundingDirection">-</span></div>
     </div>

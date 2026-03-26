@@ -14,6 +14,10 @@ function init() {
   document.getElementById("routePayoutBtn").addEventListener("click", doRoutePayout);
   document.getElementById("markPriceInput").addEventListener("input", refreshAll);
   document.getElementById("fMaxInput").addEventListener("input", refreshAll);
+  document.getElementById("longMarginInput").addEventListener("input", refreshAll);
+  document.getElementById("lMaxInput").addEventListener("input", refreshAll);
+  document.getElementById("shortMarginInput").addEventListener("input", refreshAll);
+  document.getElementById("setBalanceBtn").addEventListener("click", doSetBalance);
   document.getElementById("dismissHint").addEventListener("click", () => {
     document.getElementById("walkthrough").style.display = "none";
   });
@@ -39,6 +43,7 @@ function refreshAll() {
   refreshDropdowns();
   refreshInsuredTable();
   refreshEventInfo();
+  refreshPositions();
   refreshFunding();
 }
 
@@ -213,7 +218,66 @@ function refreshFundingTable(rate, isEvent) {
     '<tr><td colspan="4" style="text-align:center;color:#8b949e">No active insureds</td></tr>';
 }
 
+// ── Positions ───────────────────────────────────────────────────────────
+
+function refreshPositions() {
+  const s = engine.state;
+  const longMargin = parseFloat(document.getElementById("longMarginInput").value) || 0;
+  const lMax = parseInt(document.getElementById("lMaxInput").value) || 5;
+  const shortMargin = parseFloat(document.getElementById("shortMarginInput").value) || 0;
+  const fMaxBps = parseInt(document.getElementById("fMaxInput").value) || F_MAX_DEFAULT_BPS;
+  const fMax = fMaxBps / 10000;
+
+  // Long position (apportionment layer)
+  const notional = s.V_pool;
+  document.getElementById("longNotional").textContent = fmt(notional) + " HYPE";
+  const longLev = longMargin > 0 ? (notional / longMargin) : 0;
+  document.getElementById("longLeverage").textContent = longLev > 0 ? longLev.toFixed(2) + "x" : "-";
+  const requiredMargin = lMax > 0 ? notional / lMax : 0;
+  document.getElementById("longRequiredMargin").textContent = fmt(requiredMargin) + " HYPE";
+  const covered = longMargin >= requiredMargin && requiredMargin > 0;
+  document.getElementById("longCoverage").textContent = covered ? "COVERED" : "UNDERCOVERED";
+  document.getElementById("longCoverage").style.color = covered ? "#3fb950" : "#f85149";
+
+  // Short position (LPs)
+  document.getElementById("shortNotional").textContent = fmt(notional) + " HYPE";
+  const shortLev = shortMargin > 0 ? (notional / shortMargin) : 0;
+  document.getElementById("shortLeverage").textContent = shortLev > 0 ? shortLev.toFixed(2) + "x" : "-";
+
+  // Worst case: largest insured gets 100% slashed
+  let maxV = 0;
+  for (const addr of s.insuredList) {
+    const ins = s.insureds.get(addr);
+    if (ins && ins.active && ins.V > maxV) maxV = ins.V;
+  }
+  // Worst case LP payout = maxV * 10000/10000 = maxV (100% slash on biggest insured)
+  // Over N* intervals, LP pays V_snap * f_max per interval
+  // N* = ceil(maxV / (V_pool * f_max * 10000 / 10000)) ... simplified:
+  // Total LP cost for worst case = maxV (the payout) + ceiling excess
+  const worstOracle = notional > 0 ? maxV / notional : 0;
+  const worstNStar = fMax > 0 ? Math.ceil(worstOracle / fMax) : 0;
+  const worstTotal = notional * fMax * worstNStar;
+  document.getElementById("shortWorstCase").textContent =
+    fmt(worstTotal) + " HYPE over " + worstNStar + "hr";
+
+  const survives = shortMargin >= worstTotal;
+  document.getElementById("shortSurvival").textContent = survives ? "YES" : "NO — liquidation risk";
+  document.getElementById("shortSurvival").style.color = survives ? "#3fb950" : "#f85149";
+
+  // Max payout the reserve can cover
+  document.getElementById("maxPayout").textContent = fmt(s.balance) + " HYPE";
+}
+
 // ── Actions ─────────────────────────────────────────────────────────────
+
+function doSetBalance() {
+  const val = parseFloat(document.getElementById("balanceInput").value);
+  if (isNaN(val) || val < 0) return logMsg("Enter a valid balance", "error");
+  engine.state.balance = val;
+  logMsg(`Payout reserve set to ${fmt(val)} HYPE`, "info");
+  refreshAll();
+}
+
 
 function doRegister() {
   const addr = document.getElementById("regAddr").value.trim();
