@@ -111,20 +111,47 @@
   </div>
 
   <div id="oracle" class="panel">
-    <h2>Oracle Feed (Simulated)</h2>
-    <p class="help">Shows what oracle_pusher.py would send to HyperCore</p>
+    <h2>Perpetual Funding</h2>
+    <p class="help">Oracle from contract + mark price you set → funding rate + per-insured flows</p>
     <div class="info-grid">
       <div><span class="label">State</span><span id="oracleState" class="badge badge-normal">NORMAL</span></div>
-      <div><span class="label">Oracle Price</span><span id="oraclePrice">0.0001</span></div>
-      <div><span class="label">N* (intervals)</span><span id="oracleNStar">-</span></div>
-      <div><span class="label">f_max (configurable)</span>
+      <div><span class="label">Oracle O(t)</span><span id="oraclePrice">0.0001</span></div>
+      <div>
+        <span class="label">Mark Price P(t)</span>
+        <input id="markPriceInput" type="text" value="0.005" style="width:80px" />
+      </div>
+      <div><span class="label">f_max</span>
         <input id="fMaxInput" type="text" value="10" style="width:60px" /> bps
       </div>
     </div>
-    <div id="oracleFundingBar" style="display:none; margin-top:12px">
-      <div class="label">Funding Progress (simulated)</div>
-      <div class="progress-bar"><div id="fundingProgress" class="progress-fill"></div></div>
-      <span id="fundingLabel">0 / 0 intervals</span>
+    <div id="fundingCalc" class="info-grid" style="margin-top:12px">
+      <div><span class="label">Funding Rate f(t)</span><span id="fundingRate">-</span></div>
+      <div><span class="label">Direction</span><span id="fundingDirection">-</span></div>
+      <div><span class="label">Pool Premium / hr</span><span id="poolPremiumHr">-</span></div>
+    </div>
+    <div id="perInsuredFunding" style="margin-top:12px">
+      <table>
+        <thead><tr>
+          <th>Insured</th>
+          <th>V_i</th>
+          <th>Premium / hr</th>
+          <th>Weight</th>
+        </tr></thead>
+        <tbody id="fundingBody"></tbody>
+      </table>
+    </div>
+    <div id="eventFundingInfo" style="display:none; margin-top:12px">
+      <div class="info-grid">
+        <div><span class="label">N* (intervals to payout)</span><span id="oracleNStar">-</span></div>
+        <div><span class="label">Payout delivery time</span><span id="payoutTime">-</span></div>
+        <div><span class="label">Total from LPs</span><span id="totalFromLPs">-</span></div>
+        <div><span class="label">Ceiling excess</span><span id="ceilingExcess">-</span></div>
+      </div>
+      <div style="margin-top:8px">
+        <div class="label">Funding Progress</div>
+        <div class="progress-bar"><div id="fundingProgress" class="progress-fill"></div></div>
+        <span id="fundingLabel">-</span>
+      </div>
     </div>
   </div>
 

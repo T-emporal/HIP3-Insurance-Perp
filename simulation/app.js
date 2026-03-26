@@ -189,39 +189,109 @@ async function refreshEventInfo(isEvent) {
 async function refreshOracle(isEvent) {
   const stateEl = document.getElementById("oracleState");
   const priceEl = document.getElementById("oraclePrice");
-  const nStarEl = document.getElementById("oracleNStar");
-  const fundingBar = document.getElementById("oracleFundingBar");
-
-  if (!isEvent) {
-    stateEl.textContent = "NORMAL";
-    stateEl.className = "badge badge-normal";
-    priceEl.textContent = "0.0001 (keep-alive)";
-    nStarEl.textContent = "-";
-    fundingBar.style.display = "none";
-    return;
-  }
-
-  stateEl.textContent = "EVENT";
-  stateEl.className = "badge badge-event";
-
-  const oracle = Number(await contract.oracleValue6());
-  const oracleDecimal = oracle / 1e6;
-  priceEl.textContent = oracleDecimal.toFixed(6);
-
+  const eventFundingEl = document.getElementById("eventFundingInfo");
   const fMaxBps = parseInt(document.getElementById("fMaxInput").value) || F_MAX_DEFAULT_BPS;
   const fMax = fMaxBps / 10000;
-  const nStar = Math.ceil(oracleDecimal / fMax);
-  nStarEl.textContent = nStar.toString();
+  const markPrice = parseFloat(document.getElementById("markPriceInput").value) || 0;
 
-  fundingBar.style.display = "block";
-  const vSnap = Number(ethers.formatEther(await contract.V_snap()));
-  const payout = Number(ethers.formatEther(await contract.pendingPayout()));
-  const perInterval = vSnap * fMax;
-  const totalFunding = perInterval * nStar;
-  const pct = Math.min(100, (totalFunding / payout) * 100);
-  document.getElementById("fundingProgress").style.width = pct + "%";
-  document.getElementById("fundingLabel").textContent =
-    `${perInterval.toFixed(4)} HYPE/interval x ${nStar} = ${totalFunding.toFixed(4)} HYPE (need ${payout.toFixed(4)}) | ceiling excess: ${(totalFunding - payout).toFixed(4)}`;
+  if (!isEvent) {
+    // ── NORMAL STATE: longs pay shorts, premium collection ──
+    stateEl.textContent = "NORMAL";
+    stateEl.className = "badge badge-normal";
+    const oracleKeepAlive = 0.0001;
+    priceEl.textContent = oracleKeepAlive.toFixed(4) + " (keep-alive)";
+    eventFundingEl.style.display = "none";
+
+    // f(t) = (P(t) - O(t)) / Δt — but since Δt=1hr and rates are per-interval:
+    // Effective: f = P(t) - O(t) ≈ P(t) when O≈0
+    // Premium per hour per unit notional = P(t)
+    const fundingRate = markPrice - oracleKeepAlive;
+    const capped = Math.min(fundingRate, fMax);
+    document.getElementById("fundingRate").textContent =
+      (capped * 10000).toFixed(2) + " bps/hr" + (fundingRate > fMax ? " (capped at f_max)" : "");
+    document.getElementById("fundingDirection").textContent = "Longs → Shorts (premium)";
+    document.getElementById("fundingDirection").style.color = "#58a6ff";
+
+    // Pool premium per hour = V_pool * P(t)
+    const vPool = Number(ethers.formatEther(await contract.V_pool()));
+    const poolPremium = vPool * capped;
+    document.getElementById("poolPremiumHr").textContent = poolPremium.toFixed(4) + " HYPE";
+
+    // Per-insured breakdown
+    await refreshFundingTable(capped, false);
+  } else {
+    // ── EVENT STATE: shorts pay longs at f_max ──
+    stateEl.textContent = "EVENT";
+    stateEl.className = "badge badge-event";
+
+    const oracle = Number(await contract.oracleValue6()) / 1e6;
+    priceEl.textContent = oracle.toFixed(6);
+
+    // During event: f(t) = (P(t) - O(T*)) / Δt → negative (since O >> P)
+    // Capped at -f_max, so shorts pay longs f_max per interval
+    const fundingRate = -fMax;
+    document.getElementById("fundingRate").textContent =
+      (fundingRate * 10000).toFixed(2) + " bps/hr (at -f_max)";
+    document.getElementById("fundingDirection").textContent = "Shorts → Longs (payout)";
+    document.getElementById("fundingDirection").style.color = "#f85149";
+
+    const vSnap = Number(ethers.formatEther(await contract.V_snap()));
+    const perInterval = vSnap * fMax;
+    document.getElementById("poolPremiumHr").textContent =
+      perInterval.toFixed(4) + " HYPE/hr (from LPs)";
+
+    // N* and payout timing
+    const nStar = Math.ceil(oracle / fMax);
+    const payout = Number(ethers.formatEther(await contract.pendingPayout()));
+    const totalFromLPs = perInterval * nStar;
+    const excess = totalFromLPs - payout;
+
+    eventFundingEl.style.display = "block";
+    document.getElementById("oracleNStar").textContent = nStar;
+    document.getElementById("payoutTime").textContent = nStar + " hours";
+    document.getElementById("totalFromLPs").textContent = totalFromLPs.toFixed(4) + " HYPE";
+    document.getElementById("ceilingExcess").textContent = excess.toFixed(4) + " HYPE (buffer)";
+
+    const pct = Math.min(100, (totalFromLPs / Math.max(payout, 0.0001)) * 100);
+    document.getElementById("fundingProgress").style.width = pct + "%";
+    document.getElementById("fundingLabel").textContent =
+      `${perInterval.toFixed(4)}/hr x ${nStar}hr = ${totalFromLPs.toFixed(4)} HYPE → pays ${payout.toFixed(4)} HYPE`;
+
+    await refreshFundingTable(fMax, true);
+  }
+}
+
+async function refreshFundingTable(rate, isEvent) {
+  const tbody = document.getElementById("fundingBody");
+  const count = Number(await contract.insuredCount());
+  const rows = [];
+  const labels = {};
+  if (deployInfo?.seedData?.insureds) {
+    deployInfo.seedData.insureds.forEach(i => { labels[i.address.toLowerCase()] = i.label; });
+  }
+
+  for (let i = 0; i < count; i++) {
+    try {
+      const addr = await contract.insuredList(i);
+      const ins = await contract.getInsured(addr);
+      if (!ins.active) continue;
+      const v = Number(ethers.formatEther(ins.V));
+      const premium = v * rate;
+      let weight = "0";
+      try { weight = (await contract.premiumWeight(addr)).toString(); } catch {}
+      const label = labels[addr.toLowerCase()] || shortAddr(addr);
+
+      rows.push(`<tr>
+        <td class="mono">${label}</td>
+        <td>${v.toFixed(1)}</td>
+        <td style="color:${isEvent ? '#f85149' : '#3fb950'}">${isEvent ? '+' : '-'}${premium.toFixed(4)} HYPE/hr</td>
+        <td>${weight} bps</td>
+      </tr>`);
+    } catch {}
+  }
+
+  tbody.innerHTML = rows.length ? rows.join("") :
+    '<tr><td colspan="4" style="text-align:center;color:#8b949e">No active insureds</td></tr>';
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────
