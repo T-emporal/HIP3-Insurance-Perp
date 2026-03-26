@@ -90,8 +90,12 @@ function refreshInsuredTable() {
     </tr>`);
   }
 
-  tbody.innerHTML = rows.length ? rows.join("") :
-    '<tr><td colspan="7" style="text-align:center;color:#8b949e">No insureds — add one below</td></tr>';
+  try {
+    tbody.innerHTML = rows.length ? rows.join("") :
+      '<tr><td colspan="7" style="text-align:center;color:#8b949e">No insureds — add one below</td></tr>';
+  } catch (e) {
+    console.error("Table render error:", e, "rows:", rows.length);
+  }
 }
 
 // ── Event Bar ───────────────────────────────────────────────────────────
