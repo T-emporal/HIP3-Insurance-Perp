@@ -184,3 +184,9 @@ td.mono { font-family: 'SF Mono', monospace; font-size: 0.8em; }
 .log-entry.success { border-left: 3px solid var(--success); }
 .log-entry.error { border-left: 3px solid var(--danger); }
 .log-entry.info { border-left: 3px solid var(--accent); }
+
+details summary { cursor: pointer; }
+details summary h2 { margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
+details[open] summary h2 { border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 12px; }
+.glossary-table td:first-child { font-family: 'SF Mono', monospace; color: var(--accent); white-space: nowrap; }
+.glossary-table td:nth-child(3) { color: var(--text-dim); font-size: 0.85em; white-space: nowrap; }

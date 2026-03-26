@@ -30,6 +30,7 @@ function refreshAll() {
 
   document.getElementById("vPool").textContent = fmt(s.V_pool) + " HYPE";
   document.getElementById("piPool").textContent = Math.round(engine.piPoolWeighted()) + " bps";
+  document.getElementById("piVPool").textContent = fmt(s.piV_pool);
   document.getElementById("insuredCount").textContent = s.insuredList.filter(a => s.insureds.get(a)?.active).length;
   document.getElementById("contractBal").textContent = fmt(s.balance) + " HYPE";
   document.getElementById("eventActiveFlag").textContent = s.eventActive ? "YES" : "No";
@@ -50,17 +51,20 @@ function refreshInsuredTable() {
     if (!ins) continue;
     const w = Math.round(engine.premiumWeight(addr));
 
+    const viPi = ins.V * ins.pi;
+
     rows.push(`<tr>
       <td class="mono"><span class="tag">${addr}</span></td>
       <td>${fmt(ins.V)}</td>
       <td>${ins.pi}</td>
+      <td>${fmt(viPi)}</td>
       <td>${w}</td>
       <td style="color:${ins.active ? '#3fb950' : '#f85149'}">${ins.active ? 'Yes' : 'No'}</td>
     </tr>`);
   }
 
   tbody.innerHTML = rows.length ? rows.join("") :
-    '<tr><td colspan="5" style="text-align:center;color:#8b949e">No insureds registered</td></tr>';
+    '<tr><td colspan="6" style="text-align:center;color:#8b949e">No insureds registered</td></tr>';
 }
 
 function refreshEventInfo() {

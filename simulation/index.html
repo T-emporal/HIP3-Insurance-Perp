@@ -12,6 +12,35 @@
     <p class="subtitle">Interactive Simulator — no blockchain required</p>
   </header>
 
+  <details id="glossary" class="panel">
+    <summary><h2 style="display:inline">Notation Index</h2></summary>
+    <table class="glossary-table">
+      <thead><tr><th>Symbol</th><th>Name</th><th>Unit</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td>V_i</td><td>Coverage notional</td><td>HYPE</td><td>Insured's at-risk capital (stake), fixed at registration</td></tr>
+        <tr><td>π_i</td><td>Risk parameter</td><td>bps</td><td>Auditor-certified expected loss probability. 500 bps = 5%</td></tr>
+        <tr><td>V_i · π_i</td><td>Risk-weighted notional</td><td>HYPE·bps</td><td>Insured's contribution to pool risk. Drives premium apportionment</td></tr>
+        <tr><td>w_i</td><td>Premium weight</td><td>bps</td><td>V_i · π_i / Σ(V_j · π_j) — insured's share of total pool premium</td></tr>
+        <tr><td>V_pool</td><td>Pool notional</td><td>HYPE</td><td>Σ V_i — total at-risk capital across all active insureds</td></tr>
+        <tr><td>π_pool</td><td>Pool risk (weighted)</td><td>bps</td><td>Σ(π_i · V_i) / V_pool — capital-weighted average risk</td></tr>
+        <tr><td>Σ(V_i · π_i)</td><td>Aggregate risk-weighted notional</td><td>HYPE·bps</td><td>piV_pool — denominator for premium weight calculation</td></tr>
+        <tr><td>P(t)</td><td>Mark price</td><td>decimal</td><td>Order book consensus on pool risk. You set this (simulating the market)</td></tr>
+        <tr><td>O(t)</td><td>Oracle price</td><td>decimal</td><td>Normal: ≈0 (keep-alive). Event: V_i · λ_i / V_snap</td></tr>
+        <tr><td>f(t)</td><td>Funding rate</td><td>bps/hr</td><td>P(t) − O(t), capped at ±f_max. Determines who pays whom per interval</td></tr>
+        <tr><td>f_max</td><td>Max funding rate</td><td>bps</td><td>Hyperliquid system constant. Caps funding per interval</td></tr>
+        <tr><td>Δt</td><td>Funding interval</td><td>1 hour</td><td>Hyperliquid constant — funding settles every hour</td></tr>
+        <tr><td>λ_i</td><td>Loss fraction</td><td>bps</td><td>Fraction of V_i lost in a slash event. 5000 = 50%</td></tr>
+        <tr><td>V_snap</td><td>Pool snapshot</td><td>HYPE</td><td>V_pool frozen at event trigger. Doesn't change during event window</td></tr>
+        <tr><td>O(T*)</td><td>Event oracle</td><td>decimal</td><td>V_i · λ_i / V_snap — calibrated so perp delivers exact payout</td></tr>
+        <tr><td>N*</td><td>Payout intervals</td><td>hours</td><td>⌈O(T*) / f_max⌉ — funding intervals needed to deliver full payout</td></tr>
+        <tr><td>Payout</td><td>Loss compensation</td><td>HYPE</td><td>V_i · λ_i — exact amount owed to slashed insured</td></tr>
+        <tr><td>Ceiling excess</td><td>Rounding surplus</td><td>HYPE</td><td>V_snap · N* · f_max − V_i · λ_i — always ≥ 0, accumulates as buffer</td></tr>
+        <tr><td>M_i</td><td>Required margin</td><td>HYPE</td><td>V_i / L_max — minimum margin the layer must post per insured</td></tr>
+        <tr><td>L_max</td><td>Leverage cap</td><td>integer</td><td>⌊1 / ΔP_max⌋ — policy choice by pool operator (not shown in sim)</td></tr>
+      </tbody>
+    </table>
+  </details>
+
   <div class="grid-2">
     <div id="registry" class="panel">
       <h2>Registry</h2>
@@ -31,9 +60,11 @@
       <h2>Pool State</h2>
       <div class="info-grid">
         <div><span class="label">Insured Count</span><span id="insuredCount">0</span></div>
-        <div><span class="label">V_pool</span><span id="vPool">0 HYPE</span></div>
-        <div><span class="label">pi_pool (weighted)</span><span id="piPool">0 bps</span></div>
+        <div><span class="label">V_pool (Σ V_i)</span><span id="vPool">0 HYPE</span></div>
+        <div><span class="label">π_pool (weighted)</span><span id="piPool">0 bps</span></div>
+        <div><span class="label">Σ(V_i · π_i)</span><span id="piVPool">0</span></div>
         <div><span class="label">Contract Balance</span><span id="contractBal">0 HYPE</span></div>
+        <div><span class="label">Δt (funding interval)</span><span>1 hour</span></div>
         <div><span class="label">Event Active</span><span id="eventActiveFlag">No</span></div>
       </div>
     </div>
@@ -46,8 +77,9 @@
         <tr>
           <th>Name</th>
           <th>V_i (HYPE)</th>
-          <th>pi_i (bps)</th>
-          <th>Weight (bps)</th>
+          <th>π_i (bps)</th>
+          <th>V_i · π_i</th>
+          <th>w_i (bps)</th>
           <th>Active</th>
         </tr>
       </thead>
