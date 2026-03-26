@@ -12,6 +12,18 @@
     <p class="subtitle">Interactive Simulator — no blockchain required</p>
   </header>
 
+  <!-- Walkthrough hint -->
+  <div id="walkthrough" class="panel hint-panel">
+    <strong>Try this:</strong>
+    1. Set a mark price below (e.g. 0.005 = market thinks 0.5% risk)
+    &rarr; 2. Pick an insured from the dropdown and trigger a slash event
+    &rarr; 3. Watch the oracle flip, funding reverse, and payout compute
+    &rarr; 4. Route the payout
+    <button id="dismissHint" class="btn" style="margin-left:12px; padding:2px 10px">Got it</button>
+  </div>
+
+  <!-- ═══════════ NOTATION INDEX ═══════════ -->
+
   <details id="glossary" class="panel">
     <summary><h2 style="display:inline">Notation Index</h2></summary>
     <table class="glossary-table">
@@ -41,37 +53,13 @@
     </table>
   </details>
 
-  <div class="grid-2">
-    <div id="registry" class="panel">
-      <h2>Registry</h2>
-      <div class="form-row">
-        <input id="regAddr" type="text" placeholder="Name (e.g. MyValidator)" />
-        <input id="regV" type="text" placeholder="V_i (HYPE)" />
-        <input id="regPi" type="text" placeholder="pi_i (bps)" />
-        <button id="registerBtn" class="btn">Register</button>
-      </div>
-      <div class="form-row">
-        <input id="deregAddr" type="text" placeholder="Name to deregister" />
-        <button id="deregisterBtn" class="btn danger">Deregister</button>
-      </div>
-    </div>
+  <!-- ═══════════ INSURED PERSPECTIVE ═══════════ -->
 
-    <div id="pool" class="panel">
-      <h2>Pool State</h2>
-      <div class="info-grid">
-        <div><span class="label">Insured Count</span><span id="insuredCount">0</span></div>
-        <div><span class="label">V_pool (Σ V_i)</span><span id="vPool">0 HYPE</span></div>
-        <div><span class="label">π_pool (weighted)</span><span id="piPool">0 bps</span></div>
-        <div><span class="label">Σ(V_i · π_i)</span><span id="piVPool">0</span></div>
-        <div><span class="label">Contract Balance</span><span id="contractBal">0 HYPE</span></div>
-        <div><span class="label">Δt (funding interval)</span><span>1 hour</span></div>
-        <div><span class="label">Event Active</span><span id="eventActiveFlag">No</span></div>
-      </div>
-    </div>
-  </div>
+  <div class="section-label">Insured View</div>
 
   <div id="insuredTable" class="panel">
     <h2>Registered Insureds</h2>
+    <p class="help">Each row is an entity insured against slashing. Their premium is apportioned by risk-weighted share.</p>
     <table>
       <thead>
         <tr>
@@ -80,6 +68,7 @@
           <th>π_i (bps)</th>
           <th>V_i · π_i</th>
           <th>w_i (bps)</th>
+          <th>Premium / hr</th>
           <th>Active</th>
         </tr>
       </thead>
@@ -87,73 +76,115 @@
     </table>
   </div>
 
-  <div id="event" class="panel">
-    <h2>Slash Event</h2>
-    <div class="form-row">
-      <input id="evtAddr" type="text" placeholder="Insured name (e.g. LowRisk-Validator)" />
-      <input id="evtLambda" type="text" placeholder="lambda_i (bps)" />
-      <button id="triggerBtn" class="btn danger">Trigger Event</button>
-      <button id="routePayoutBtn" class="btn primary">Route Payout</button>
+  <!-- ═══════════ APPORTIONMENT LAYER PERSPECTIVE ═══════════ -->
+
+  <div class="section-label">Apportionment Layer</div>
+
+  <div class="grid-2">
+    <div id="pool" class="panel">
+      <h2>Pool State</h2>
+      <div class="info-grid">
+        <div><span class="label">Insured Count</span><span id="insuredCount">0</span></div>
+        <div><span class="label">V_pool (Σ V_i)</span><span id="vPool">0 HYPE</span></div>
+        <div><span class="label">π_pool (weighted)</span><span id="piPool">0 bps</span></div>
+        <div><span class="label">Σ(V_i · π_i)</span><span id="piVPool">0</span></div>
+        <div><span class="label">Payout Reserve</span><span id="contractBal">0 HYPE</span></div>
+        <div><span class="label">Event Active</span><span id="eventActiveFlag">No</span></div>
+      </div>
     </div>
-    <div id="eventInfo" class="info-grid" style="margin-top:12px; display:none">
-      <div><span class="label">Event Insured</span><span id="evtInsured" class="mono">-</span></div>
-      <div><span class="label">Lambda (bps)</span><span id="evtLambdaVal">-</span></div>
-      <div><span class="label">V_snap</span><span id="evtVSnap">-</span></div>
-      <div><span class="label">Oracle O(T*)</span><span id="evtOracle">-</span></div>
-      <div><span class="label">Pending Payout</span><span id="evtPayout">-</span></div>
+
+    <div id="oracleState_panel" class="panel">
+      <h2>Oracle State</h2>
+      <p class="help">What the apportionment layer pushes to HyperCore</p>
+      <div class="info-grid">
+        <div><span class="label">Mode</span><span id="oracleState" class="badge badge-normal">NORMAL</span></div>
+        <div><span class="label">Oracle O(t)</span><span id="oraclePrice">0.0001</span></div>
+        <div><span class="label">Δt</span><span>1 hour</span></div>
+      </div>
     </div>
   </div>
 
-  <div id="oracle" class="panel">
+  <div class="grid-2">
+    <div id="registry" class="panel">
+      <h2>Register / Deregister</h2>
+      <div class="form-row">
+        <input id="regAddr" type="text" placeholder="Name (e.g. MyValidator)" />
+        <input id="regV" type="text" placeholder="V_i (HYPE)" />
+        <input id="regPi" type="text" placeholder="π_i (bps)" />
+        <button id="registerBtn" class="btn">Register</button>
+      </div>
+      <div class="form-row">
+        <select id="deregAddr"></select>
+        <button id="deregisterBtn" class="btn danger">Deregister</button>
+      </div>
+    </div>
+
+    <div id="event" class="panel">
+      <h2>Slash Event</h2>
+      <div class="form-row">
+        <select id="evtAddr"></select>
+        <input id="evtLambda" type="text" placeholder="λ_i (bps, e.g. 5000 = 50%)" />
+        <button id="triggerBtn" class="btn danger">Trigger</button>
+      </div>
+      <button id="routePayoutBtn" class="btn primary" style="margin-top:8px;width:100%">Route Payout</button>
+      <div id="eventInfo" class="info-grid" style="margin-top:12px; display:none">
+        <div><span class="label">Slashed</span><span id="evtInsured" class="mono">-</span></div>
+        <div><span class="label">λ_i (bps)</span><span id="evtLambdaVal">-</span></div>
+        <div><span class="label">V_snap</span><span id="evtVSnap">-</span></div>
+        <div><span class="label">O(T*)</span><span id="evtOracle">-</span></div>
+        <div><span class="label">Payout (V_i · λ_i)</span><span id="evtPayout">-</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ LP / SHORTS PERSPECTIVE ═══════════ -->
+
+  <div class="section-label">LP Shorts (Reinsurance Capital)</div>
+
+  <div id="lp" class="panel">
     <h2>Perpetual Funding</h2>
-    <p class="help">Oracle from contract state + mark price you set = funding rate + per-insured flows</p>
     <div class="info-grid">
-      <div><span class="label">State</span><span id="oracleState" class="badge badge-normal">NORMAL</span></div>
-      <div><span class="label">Oracle O(t)</span><span id="oraclePrice">0.0001</span></div>
       <div>
         <span class="label">Mark Price P(t)</span>
-        <input id="markPriceInput" type="text" value="0.005" style="width:80px" />
+        <input id="markPriceInput" type="text" value="0.005" style="width:80px" title="Market consensus on pool risk. e.g. 0.005 = 0.5% expected loss" />
       </div>
       <div><span class="label">f_max</span>
         <input id="fMaxInput" type="text" value="10" style="width:60px" /> bps
       </div>
-    </div>
-    <div id="fundingCalc" class="info-grid" style="margin-top:12px">
       <div><span class="label">Funding Rate f(t)</span><span id="fundingRate">-</span></div>
       <div><span class="label">Direction</span><span id="fundingDirection">-</span></div>
-      <div><span class="label">Pool Premium / hr</span><span id="poolPremiumHr">-</span></div>
     </div>
-    <div id="perInsuredFunding" style="margin-top:12px">
-      <table>
-        <thead><tr>
-          <th>Insured</th>
-          <th>V_i</th>
-          <th>Premium / hr</th>
-          <th>Weight</th>
-        </tr></thead>
-        <tbody id="fundingBody"></tbody>
-      </table>
-    </div>
-    <div id="eventFundingInfo" style="display:none; margin-top:12px">
-      <div class="info-grid">
-        <div><span class="label">N* (intervals to payout)</span><span id="oracleNStar">-</span></div>
-        <div><span class="label">Payout delivery time</span><span id="payoutTime">-</span></div>
-        <div><span class="label">Total from LPs</span><span id="totalFromLPs">-</span></div>
-        <div><span class="label">Ceiling excess</span><span id="ceilingExcess">-</span></div>
+
+    <div class="grid-2" style="margin-top:12px">
+      <div>
+        <h3 class="sub-header">LP Shorts Earn (Normal) / Pay (Event)</h3>
+        <div class="info-grid">
+          <div><span class="label">Total / hr</span><span id="poolPremiumHr">-</span></div>
+          <div id="lpNStarRow" style="display:none"><span class="label">Payout window (N*)</span><span id="oracleNStar">-</span></div>
+          <div id="lpTotalRow" style="display:none"><span class="label">Total LP obligation</span><span id="totalFromLPs">-</span></div>
+          <div id="lpExcessRow" style="display:none"><span class="label">Ceiling excess</span><span id="ceilingExcess">-</span></div>
+        </div>
+        <div id="eventFundingInfo" style="display:none; margin-top:8px">
+          <div class="progress-bar"><div id="fundingProgress" class="progress-fill"></div></div>
+          <span id="fundingLabel" style="font-size:0.8em">-</span>
+        </div>
       </div>
-      <div style="margin-top:8px">
-        <div class="label">Funding Progress</div>
-        <div class="progress-bar"><div id="fundingProgress" class="progress-fill"></div></div>
-        <span id="fundingLabel">-</span>
+      <div>
+        <h3 class="sub-header">Per-Insured Breakdown</h3>
+        <table>
+          <thead><tr>
+            <th>Insured</th>
+            <th>V_i</th>
+            <th>Flow / hr</th>
+            <th>w_i</th>
+          </tr></thead>
+          <tbody id="fundingBody"></tbody>
+        </table>
       </div>
     </div>
   </div>
 
-  <div id="seedPanel" class="panel">
-    <h2>Pre-loaded Test Validators</h2>
-    <p class="help">These names are pre-registered. Type them into the Slash Event field to test.</p>
-    <pre id="seedHints" class="mono" style="white-space:pre-wrap; font-size:0.85em; color:#c9d1d9; background:#0d1117; padding:8px; border-radius:4px"></pre>
-  </div>
+  <!-- ═══════════ LOG ═══════════ -->
 
   <div id="log" class="panel">
     <h2>Event Log</h2>
