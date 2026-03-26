@@ -39,21 +39,13 @@ async function main() {
     console.log(`  Registered ${ins.label}: ${ins.signer.address} | V=${ethers.formatEther(ins.V)} HYPE | pi=${ins.pi} bps`);
   }
 
-  // Pay some premiums
-  for (const ins of insureds) {
-    const premiumAmount = ins.V / 100n; // 1% of V as initial premium
-    await proxy.connect(ins.signer).payPremium({ value: premiumAmount });
-    console.log(`  Premium paid by ${ins.label}: ${ethers.formatEther(premiumAmount)} HYPE`);
-  }
-
-  // Fund contract with extra balance (simulates funding inflows from perp)
+  // Fund contract balance (simulates funding inflows from perp during event state)
   await owner.sendTransaction({ to: proxyAddr, value: ethers.parseEther("500") });
-  console.log("  Funded contract with 500 HYPE (simulated reinsurance pool)");
+  console.log("  Funded contract with 500 HYPE (simulates LP funding inflows for payouts)");
 
   const vPool = await proxy.V_pool();
   const piPool = await proxy.piPoolWeighted();
-  const bal = await proxy.balance();
-  console.log(`\n  Pool: V_pool=${ethers.formatEther(vPool)} HYPE | pi_pool=${piPool} bps | balance=${ethers.formatEther(bal)} HYPE`);
+  console.log(`\n  Pool: V_pool=${ethers.formatEther(vPool)} HYPE | pi_pool=${piPool} bps`);
 
   // --- Write deployment + seed info ---
   const deployInfo = {

@@ -37,8 +37,6 @@ async function init() {
   document.getElementById("connectBtn").addEventListener("click", connect);
   document.getElementById("registerBtn").addEventListener("click", doRegister);
   document.getElementById("deregisterBtn").addEventListener("click", doDeregister);
-  document.getElementById("payPremiumBtn").addEventListener("click", doPayPremium);
-  document.getElementById("withdrawBtn").addEventListener("click", doWithdraw);
   document.getElementById("triggerBtn").addEventListener("click", doTriggerEvent);
   document.getElementById("routePayoutBtn").addEventListener("click", doRoutePayout);
 
@@ -152,7 +150,6 @@ async function refreshInsuredTable(count) {
         <td class="mono" title="${addr}">${label ? '<span class="tag">' + label + '</span> ' : ''}${addr.slice(0,8)}...${addr.slice(-6)}</td>
         <td>${fmtEth(ins.V)}</td>
         <td>${ins.pi.toString()}</td>
-        <td>${fmtEth(ins.premiumPaid)}</td>
         <td>${weight}</td>
         <td style="color:${ins.active ? '#3fb950' : '#f85149'}">${ins.active ? 'Yes' : 'No'}</td>
       </tr>`);
@@ -160,7 +157,7 @@ async function refreshInsuredTable(count) {
   }
 
   tbody.innerHTML = rows.length ? rows.join("") :
-    '<tr><td colspan="6" style="text-align:center;color:#8b949e">No insureds registered</td></tr>';
+    '<tr><td colspan="5" style="text-align:center;color:#8b949e">No insureds registered</td></tr>';
 }
 
 async function refreshEventInfo(isEvent) {
@@ -327,40 +324,6 @@ async function doDeregister() {
     refreshAll();
   } catch (e) {
     logMsg("Deregister failed: " + parseError(e), "error");
-  }
-}
-
-async function doPayPremium() {
-  if (!signer) return logMsg("No signer — read-only mode", "error");
-  const addr = document.getElementById("premAddr").value.trim();
-  const amount = document.getElementById("premAmount").value.trim();
-  if (!addr || !amount) return logMsg("Fill premium fields", "error");
-
-  try {
-    // Impersonate the insured address (Hardhat local only)
-    const impersonated = await provider.getSigner(addr);
-    const c = contract.connect(impersonated);
-    const tx = await c.payPremium({ value: ethers.parseEther(amount) });
-    await tx.wait();
-    logMsg(`Premium paid: ${amount} HYPE from ${shortAddr(addr)}`, "success");
-    refreshAll();
-  } catch (e) {
-    logMsg("Premium failed: " + parseError(e), "error");
-  }
-}
-
-async function doWithdraw() {
-  if (!signer) return logMsg("No signer — read-only mode", "error");
-  const amount = document.getElementById("withdrawAmount").value.trim();
-  if (!amount) return logMsg("Enter withdraw amount", "error");
-
-  try {
-    const tx = await contract.withdrawPremiums(ethers.parseEther(amount));
-    await tx.wait();
-    logMsg(`Withdrawn ${amount} HYPE to owner`, "success");
-    refreshAll();
-  } catch (e) {
-    logMsg("Withdraw failed: " + parseError(e), "error");
   }
 }
 

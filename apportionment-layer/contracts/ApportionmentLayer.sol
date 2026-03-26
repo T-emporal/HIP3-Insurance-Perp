@@ -7,24 +7,26 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 /**
  * @title  ApportionmentLayer
- * @notice Generic primary-insurance registry and payout router for the
- *         two-layer perpetual insurance framework described in
- *         "Perpetual Contracts as a General Insurance Mechanism".
+ * @notice Singleton registry and payout router for the two-layer perpetual
+ *         insurance framework. This contract is the sole long counterparty
+ *         of the SLASH-HIP3 reinsurance perpetual on HyperCore.
  *
- * @dev    UUPS-upgradeable for testnet iteration. For production (mainnet),
- *         deploy a non-upgradeable version per security constraint B3.
+ * @dev    UUPS-upgradeable for testnet iteration. For production, deploy
+ *         non-upgradeable per security constraint B3.
  *
- *         This contract is the singleton counterparty of the SLASH-HIP3
- *         reinsurance perpetual on HyperCore. It:
+ *         The contract:
  *           1. Maintains a registry of insured entities (V_i, π_i).
- *           2. Tracks premium deposits, weighted by each insured's
- *              risk-adjusted share of the pool (V_i * π_i / Σ V_j * π_j).
+ *           2. Exposes risk-adjusted premium weights for off-chain apportionment.
  *           3. On an event, freezes V_snap, computes O(T*) = V_i * λ_i / V_snap,
  *              and exposes it as oracleValue6 (scaled to 1e6).
- *           4. oracle_pusher.py reads oracleValue6 via eth_call and pushes it
- *              to HyperCore setOracle.
- *           5. After N* funding intervals complete, owner calls routePayout()
- *              to transfer V_i * λ_i HYPE to the slashed insured.
+ *           4. After N* funding intervals, owner calls routePayout() to transfer
+ *              V_i * λ_i to the slashed insured.
+ *
+ *         Premiums are NOT collected by this contract. They flow through the
+ *         perpetual's funding mechanism: the layer holds the long position,
+ *         funding debits the long's margin, and LP shorts receive it directly.
+ *         Each insured's fair share is: w_i * V_pool * P(t) per interval,
+ *         where w_i = V_i * π_i / Σ(V_j * π_j).
  *
  * Units
  * ─────
@@ -36,8 +38,7 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
  * Singleton constraint (Theorem 8.9)
  * ───────────────────────────────────
  *   Only one instance of this contract may interact with the reinsurance
- *   perpetual. If two instances each calibrate using their own partial
- *   V_snap, the combined payout would be 2 * V_i * λ_i ≠ V_i * λ_i.
+ *   perpetual. Two instances produce 2 * V_i * λ_i ≠ V_i * λ_i.
  */
 contract ApportionmentLayer is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
@@ -46,7 +47,6 @@ contract ApportionmentLayer is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     struct Insured {
         uint256 V;            // coverage notional in wei (fixed at registration)
         uint256 pi;           // risk parameter in bps
-        uint256 premiumPaid;  // cumulative premium deposited in wei
         bool    active;
     }
 
@@ -64,7 +64,7 @@ contract ApportionmentLayer is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     bool    public eventActive;
     address public eventInsured;
     uint256 public eventLambdaBps;  // λ_i supplied by owner at event time
-    uint256 public V_snap;          // pool total frozen at event trigger (Definition 3.4)
+    uint256 public V_snap;          // pool total frozen at event trigger
     uint256 public oracleValue6;    // O(T*) = V_i * λ_i / V_snap, scaled * 1e6
     uint256 public pendingPayout;   // V_i * λ_i in wei
 
@@ -72,7 +72,6 @@ contract ApportionmentLayer is Initializable, UUPSUpgradeable, OwnableUpgradeabl
 
     event Registered(address indexed insured, uint256 V, uint256 pi);
     event Deregistered(address indexed insured);
-    event PremiumPaid(address indexed insured, uint256 amount);
     event EventTriggered(
         address indexed insured,
         uint256 lambdaBps,
@@ -82,9 +81,8 @@ contract ApportionmentLayer is Initializable, UUPSUpgradeable, OwnableUpgradeabl
     );
     event PayoutRouted(address indexed insured, uint256 amount);
     event EventCleared();
-    event PremiumsWithdrawn(uint256 amount);
 
-    // ── Initializer (replaces constructor for UUPS) ─────────────────────
+    // ── Initializer ─────────────────────────────────────────────────────
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -120,7 +118,6 @@ contract ApportionmentLayer is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         registry[_insured] = Insured({
             V:           _V,
             pi:          _pi,
-            premiumPaid: 0,
             active:      true
         });
         insuredList.push(_insured);
@@ -149,16 +146,6 @@ contract ApportionmentLayer is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         emit Deregistered(_insured);
     }
 
-    // ── Premium collection ────────────────────────────────────────────────
-
-    function payPremium() external payable {
-        require(registry[msg.sender].active, "AL: not registered");
-        require(msg.value > 0,               "AL: zero premium");
-
-        registry[msg.sender].premiumPaid += msg.value;
-        emit PremiumPaid(msg.sender, msg.value);
-    }
-
     // ── Event state ───────────────────────────────────────────────────────
 
     function triggerEvent(address _insured, uint256 _lambdaBps)
@@ -177,12 +164,7 @@ contract ApportionmentLayer is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         eventLambdaBps = _lambdaBps;
         V_snap         = V_pool;
 
-        // O(T*) scaled to 1e6
-        // = V_i * (λ_i / 1e4) / V_snap * 1e6
-        // = V_i * λ_i * 100 / V_snap
         oracleValue6  = (ins.V * _lambdaBps * 100) / V_snap;
-
-        // Payout = V_i * λ_i (wei)
         pendingPayout = (ins.V * _lambdaBps) / 10_000;
 
         emit EventTriggered(
@@ -197,7 +179,6 @@ contract ApportionmentLayer is Initializable, UUPSUpgradeable, OwnableUpgradeabl
         address target = eventInsured;
         uint256 amount = pendingPayout;
 
-        // Clear event state before transfer (checks-effects-interactions)
         eventActive    = false;
         eventInsured   = address(0);
         eventLambdaBps = 0;
@@ -219,6 +200,9 @@ contract ApportionmentLayer is Initializable, UUPSUpgradeable, OwnableUpgradeabl
 
     // ── Pool views ────────────────────────────────────────────────────────
 
+    /// @notice Risk-adjusted premium weight of insured i, in bps of pool total.
+    ///         w_i = V_i * π_i / Σ(V_j * π_j)
+    ///         Premium per interval = w_i * V_pool * P(t)
     function premiumWeight(address _insured) external view returns (uint256) {
         if (piV_pool == 0) return 0;
         Insured storage ins = registry[_insured];
@@ -237,28 +221,17 @@ contract ApportionmentLayer is Initializable, UUPSUpgradeable, OwnableUpgradeabl
 
     function getInsured(address _insured)
         external view
-        returns (uint256 V, uint256 pi, uint256 premiumPaid, bool active)
+        returns (uint256 V, uint256 pi, bool active)
     {
         Insured storage ins = registry[_insured];
-        return (ins.V, ins.pi, ins.premiumPaid, ins.active);
+        return (ins.V, ins.pi, ins.active);
     }
 
     function balance() external view returns (uint256) {
         return address(this).balance;
     }
 
-    // ── Admin ─────────────────────────────────────────────────────────────
-
-    function withdrawPremiums(uint256 amount)
-        external
-        onlyOwner
-        noActiveEvent
-    {
-        require(address(this).balance >= amount, "AL: insufficient balance");
-        (bool ok, ) = owner().call{value: amount}("");
-        require(ok, "AL: withdraw failed");
-        emit PremiumsWithdrawn(amount);
-    }
+    // ── Receive (for funding inflows during event state) ────────────────
 
     receive() external payable {}
 }
