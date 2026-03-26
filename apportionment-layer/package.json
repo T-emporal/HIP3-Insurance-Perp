@@ -1,0 +1,23 @@
+{
+  "name": "apportionment-layer",
+  "version": "1.0.0",
+  "description": "HIP3 Perpetual Insurance - Apportionment Layer (UUPS Upgradeable)",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:testnet": "hardhat run scripts/deploy.js --network hyperevm_testnet",
+    "upgrade:local": "hardhat run scripts/upgrade.js --network localhost",
+    "upgrade:testnet": "hardhat run scripts/upgrade.js --network hyperevm_testnet",
+    "node": "hardhat node"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@openzeppelin/contracts-upgradeable": "^5.1.0",
+    "@openzeppelin/hardhat-upgrades": "^3.6.0",
+    "hardhat": "^2.22.0"
+  },
+  "dependencies": {
+    "solc": "^0.8.24"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "hip3-insurance-perp",
+  "version": "1.0.0",
+  "description": "HIP3 Perpetual Insurance — Apportionment Layer + SLASH Perp",
+  "scripts": {
+    "start": "bash start.sh",
+    "test": "cd apportionment-layer && npx hardhat test",
+    "compile": "cd apportionment-layer && npx hardhat compile",
+    "deploy:testnet": "bash deploy-testnet.sh"
+  },
+  "private": true
+}

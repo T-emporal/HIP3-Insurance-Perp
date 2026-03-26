@@ -1,0 +1,18 @@
+node_modules/
+artifacts/
+cache/
+typechain-types/
+coverage/
+.openzeppelin/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Config with secrets
+hip3-perp-deployment/config.json
+
+# OS
+.DS_Store

@@ -1,0 +1,8 @@
+{
+  "_comment": "Copy this to config.json and fill in your values.",
+
+  "secret_key": "0xYOUR_PRIVATE_KEY_HERE",
+
+  "account_address": "",
+  "_account_address_comment": "Leave empty if signing key IS the deployer address. Fill in only if you are using an API/agent wallet whose address differs from the key."
+}
