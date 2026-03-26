@@ -68,8 +68,12 @@ const engine = (() => {
     state.eventLambdaBps = lambdaBps;
     state.V_snap = state.V_pool;
 
-    // O(T*) * 1e6 = V_i * λ_i * 100 / V_snap
-    state.oracleValue6 = (ins.V * lambdaBps * 100) / state.V_snap;
+    // Event oracle: pool aggregate risk with insured i snapped from expected (π_i) to realised (λ_i)
+    // O(T*) = [Σ_{j≠i}(π_j · V_j) + λ_i · V_i] / (V_snap * 10000)
+    //       = [piV_pool - π_i·V_i + λ_i·V_i] / (V_snap * 10000)
+    //       = [piV_pool + V_i·(λ_i - π_i)] / (V_snap * 10000)
+    // Scaled to 1e6:
+    state.oracleValue6 = ((state.piV_pool + ins.V * (lambdaBps - ins.pi)) * 100) / state.V_snap;
 
     // Payout = V_i * λ_i / 10000
     state.pendingPayout = (ins.V * lambdaBps) / 10000;
@@ -103,7 +107,10 @@ const engine = (() => {
   // ── Views ───────────────────────────────────────────────────────────
 
   function currentOracleValue() {
-    return state.eventActive ? state.oracleValue6 : 0;
+    if (state.eventActive) return state.oracleValue6;
+    // Normal state: oracle = π_pool (as decimal * 1e6)
+    // piPoolWeighted returns bps, convert: bps / 10000 * 1e6 = bps * 100
+    return piPoolWeighted() * 100;
   }
 
   function premiumWeight(addr) {

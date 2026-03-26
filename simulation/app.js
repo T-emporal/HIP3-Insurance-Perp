@@ -59,7 +59,8 @@ function refreshInsuredTable() {
   const markPrice = parseFloat(document.getElementById("markPriceInput").value) || 0;
   const fMaxPct = parseFloat(document.getElementById("fMaxInput").value) || F_MAX_DEFAULT_PCT;
   const fMax = fMaxPct / 100;
-  const rate = s.eventActive ? fMax : Math.min(markPrice - 0.0001, fMax);
+  const normalOracle = engine.currentOracleValue() / 1e6;
+  const rate = s.eventActive ? fMax : Math.min(Math.max(markPrice - normalOracle, 0), fMax);
   const rows = [];
 
   for (const addr of s.insuredList) {
@@ -168,10 +169,11 @@ function refreshFunding() {
   if (!s.eventActive) {
     stateEl.textContent = "NORMAL";
     stateEl.className = "badge badge-normal";
-    priceEl.textContent = "0.0001 (keep-alive)";
+    const normalOracle = engine.currentOracleValue() / 1e6;
+    priceEl.textContent = normalOracle.toFixed(6) + " (π_pool)";
 
-    const fundingRate = markPrice - 0.0001;
-    const capped = Math.min(fundingRate, fMax);
+    const fundingRate = markPrice - normalOracle;
+    const capped = Math.min(Math.max(fundingRate, 0), fMax);
     document.getElementById("fundingRate").textContent =
       (capped * 100).toFixed(4) + "%/hr" + (fundingRate > fMax ? " (capped)" : "");
     document.getElementById("fundingDirection").textContent = "Longs (Insureds) → Shorts (Insurers)";
